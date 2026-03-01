@@ -992,22 +992,44 @@ function RespondentView({token}){
         React.createElement(QCard,{key:visibleQ[qIdx]?.id||qIdx,question:visibleQ[qIdx],value:answers[visibleQ[qIdx]?.id],onChange:handleAnswer,brand}),
         React.createElement('div',{className:'flex justify-between items-center pt-4'},
           settings.allow_back&&qIdx>0?React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400',onClick:goBack},'← Back'):React.createElement('div',null),
-          React.createElement('button',{
-            className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:brand},onClick:goNext,
-            disabled:visibleQ[qIdx]?.type!=='context_screen'&&visibleQ[qIdx]?.required&&(answers[visibleQ[qIdx]?.id]===undefined||answers[visibleQ[qIdx]?.id]==='')
-          },qIdx<visibleQ.length-1?'Next →':'Continue →')
+          (()=>{
+            const cq=visibleQ[qIdx];
+            const isCS=['card_sort_open','card_sort_closed'].includes(cq?.type);
+            const csVal=isCS?answers[cq?.id]:null;
+            const csIncomplete=isCS&&(!csVal||!csVal.uncategorized||(csVal.uncategorized&&csVal.uncategorized.length>0));
+            const reqIncomplete=cq?.type!=='context_screen'&&cq?.required&&(answers[cq?.id]===undefined||answers[cq?.id]==='');
+            const isDisabled=csIncomplete||reqIncomplete;
+            return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}},
+              isCS&&csIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please sort all cards into categories before continuing'),
+              React.createElement('button',{
+                className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:isDisabled?'#9ca3af':brand,cursor:isDisabled?'not-allowed':'pointer'},onClick:isDisabled?undefined:goNext,
+                disabled:isDisabled
+              },qIdx<visibleQ.length-1?'Next →':'Continue →')
+            );
+          })()
         )
       ),
-      state==='taking'&&qIdx>=visibleQ.length&&React.createElement('div',null,
+      state==='taking'&&qIdx>=visibleQ.length&&visibleQ.length>0&&React.createElement('div',null,
+        React.createElement('div',{className:'bg-white border border-gray-200 rounded-2xl px-6 py-8 mb-4 shadow-sm text-center'},
+          React.createElement('div',{style:{width:64,height:64,borderRadius:'50%',background:'#f0fdf4',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:16}},mIcon('task_alt',{size:36,style:{color:'#16a34a'}})),
+          React.createElement('h2',{className:'text-xl font-bold text-gray-900 mb-2 font-display'},"You're all done!"),
+          React.createElement('p',{className:'text-sm text-gray-500 mb-1'},'You have completed all questions in this survey.'),
+          visibleQ.length>0&&React.createElement('p',{className:'text-xs text-gray-400'},`${visibleQ.length} question${visibleQ.length!==1?'s':''} answered`)
+        ),
         settings.collect_email&&React.createElement('div',{className:'bg-white border border-gray-200 rounded-2xl px-6 py-6 mb-4 shadow-sm'},
           React.createElement('div',{className:'text-lg font-semibold text-gray-900 leading-relaxed mb-1.5'},'Want to share your email?'),
           React.createElement('p',{className:'text-sm text-gray-500 mb-3.5 leading-relaxed'},'Optional. We may follow up to learn more.'),
           React.createElement('input',{type:'email',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',value:email,onChange:e=>setEmail(e.target.value),placeholder:'your@email.com'})
         ),
         React.createElement('div',{className:'flex justify-between items-center pt-4'},
-          settings.allow_back&&React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400',onClick:goBack},'← Back'),
-          React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-green-600 text-white px-5.5 py-2.5 text-base',onClick:submit},[mIcon('check_circle',{size:18}),' Submit Survey'])
+          settings.allow_back?React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400',onClick:goBack},'← Back'):React.createElement('div'),
+          React.createElement('button',{className:'inline-flex items-center gap-1.5 px-6 py-3 rounded-xl border-none text-base font-semibold transition-all whitespace-nowrap cursor-pointer text-white shadow-lg',style:{background:'#16a34a'},onClick:submit},[mIcon('check_circle',{size:20}),' Submit Survey'])
         )
+      ),
+      state==='taking'&&qIdx>=visibleQ.length&&visibleQ.length===0&&React.createElement('div',{className:'text-center px-5 py-10'},
+        React.createElement('div',{style:{fontSize:48,marginBottom:14}},mIcon('error_outline',{size:48,style:{color:'#ef4444'}})),
+        React.createElement('h2',{className:'text-xl font-bold text-gray-900 mb-2'},'No questions found'),
+        React.createElement('p',{className:'text-sm text-gray-500'},'This survey has no questions. Please contact the survey creator.')
       ),
       state==='done'&&React.createElement('div',{className:'text-center px-5 py-10'},
         React.createElement('div',{style:{width:80,height:80,borderRadius:'50%',background:'#d1fae5',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:20}},mIcon('check_circle',{size:48,style:{color:'#059669'}})),
@@ -1648,6 +1670,127 @@ function QuestionCharts({survey}){
           React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},React.createElement('span',null,val),React.createElement('span',null,`${cnt} (${(cnt/answers.length*100).toFixed(0)}%)`)),
           React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full bg-embark-teal rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${cnt/answers.length*100}%`}}))
         ));
+      } else if(['card_sort_open','card_sort_closed'].includes(q.type)){
+        // Card Sort Analytics
+        const cards=q.cards||[];
+        const predefinedCats=q.categories||[];
+        // Parse all responses into a uniform structure: [{categories:{catId:[cardId,...]}, catNames:{catId:name}}]
+        const parsed=answers.map(a=>{
+          const rv=a.raw_value;
+          if(!rv||typeof rv!=='object')return null;
+          return{categories:rv.categories||{},catNames:rv.catNames||{}};
+        }).filter(Boolean);
+        const n=parsed.length;
+
+        if(q.type==='card_sort_closed'){
+          // Closed sort: show a card×category placement matrix (heatmap)
+          const catIds=predefinedCats.map(c=>c.id);
+          const catNames={};predefinedCats.forEach(c=>{catNames[c.id]=c.name;});
+          // Count: how many times card X was placed in category Y
+          const matrix={};// {cardId:{catId:count}}
+          cards.forEach(card=>{matrix[card.id]={};catIds.forEach(cid=>{matrix[card.id][cid]=0;});});
+          parsed.forEach(r=>{
+            Object.entries(r.categories).forEach(([catId,cardIds])=>{
+              (cardIds||[]).forEach(cardId=>{if(matrix[cardId]&&matrix[cardId][catId]!==undefined)matrix[cardId][catId]++;});
+            });
+          });
+          // Render as table with color-coded cells
+          content=React.createElement('div',null,
+            React.createElement('p',{style:{fontSize:12,color:'#6b7280',marginBottom:12}},'Card placement matrix — shows what % of respondents placed each card in each category. Darker = stronger agreement.'),
+            React.createElement('div',{style:{overflowX:'auto'}},
+              React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:13}},
+                React.createElement('thead',null,
+                  React.createElement('tr',null,
+                    React.createElement('th',{style:{textAlign:'left',padding:'8px 12px',borderBottom:'2px solid #e5e7eb',fontWeight:600,color:'#374151',minWidth:120}},'Card'),
+                    catIds.map(cid=>React.createElement('th',{key:cid,style:{textAlign:'center',padding:'8px 10px',borderBottom:'2px solid #e5e7eb',fontWeight:600,color:'#374151',minWidth:80}},catNames[cid]||'Category'))
+                  )
+                ),
+                React.createElement('tbody',null,
+                  cards.map(card=>{
+                    const row=matrix[card.id]||{};
+                    const maxCount=Math.max(...Object.values(row),1);
+                    return React.createElement('tr',{key:card.id},
+                      React.createElement('td',{style:{padding:'8px 12px',fontWeight:500,color:'#374151',borderBottom:'1px solid #f3f4f6'}},card.text),
+                      catIds.map(cid=>{
+                        const cnt=row[cid]||0;
+                        const pct=n>0?Math.round((cnt/n)*100):0;
+                        const intensity=n>0?cnt/n:0;
+                        const bg=`rgba(0,172,189,${Math.max(0.05,intensity)})`;
+                        const textColor=intensity>0.6?'white':'#374151';
+                        return React.createElement('td',{key:cid,style:{textAlign:'center',padding:'6px 8px',background:bg,color:textColor,fontWeight:intensity>0.4?600:400,borderBottom:'1px solid #f3f4f6',borderLeft:'1px solid #f3f4f6',transition:'all .2s'}},
+                          cnt>0?`${pct}%`:'-'
+                        );
+                      })
+                    );
+                  })
+                )
+              )
+            ),
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginTop:12,fontSize:11,color:'#9ca3af'}},
+              React.createElement('span',null,'Agreement: '),
+              [0.1,0.3,0.5,0.7,0.9].map(v=>React.createElement('div',{key:v,style:{width:24,height:14,borderRadius:3,background:`rgba(0,172,189,${v})`}})),
+              React.createElement('span',null,'Low → High')
+            )
+          );
+        } else {
+          // Open sort: show co-occurrence matrix (how often cards were grouped together) + popular category names
+          // Co-occurrence: count how many respondents placed card A and card B in the same category
+          const coMatrix={};
+          cards.forEach(c1=>{coMatrix[c1.id]={};cards.forEach(c2=>{coMatrix[c1.id][c2.id]=0;});});
+          parsed.forEach(r=>{
+            Object.values(r.categories).forEach(cardIds=>{
+              (cardIds||[]).forEach(a=>{
+                (cardIds||[]).forEach(b=>{if(a!==b&&coMatrix[a])coMatrix[a][b]++;});
+              });
+            });
+          });
+          // Popular category names
+          const catNameFreq={};
+          parsed.forEach(r=>{
+            Object.values(r.catNames||{}).forEach(name=>{
+              const norm=name.toLowerCase().trim();
+              if(norm)catNameFreq[norm]=(catNameFreq[norm]||0)+1;
+            });
+          });
+          const topCats=Object.entries(catNameFreq).sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+          content=React.createElement('div',null,
+            React.createElement('p',{style:{fontSize:12,color:'#6b7280',marginBottom:12}},'Co-occurrence matrix — shows how often respondents grouped cards together. Darker = more frequently paired.'),
+            // Co-occurrence table
+            React.createElement('div',{style:{overflowX:'auto',marginBottom:20}},
+              React.createElement('table',{style:{borderCollapse:'collapse',fontSize:11}},
+                React.createElement('thead',null,
+                  React.createElement('tr',null,
+                    React.createElement('th',{style:{padding:'6px 8px'}}),
+                    cards.map(c=>React.createElement('th',{key:c.id,style:{padding:'4px 6px',fontWeight:600,color:'#374151',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',writingMode:'vertical-rl',textOrientation:'mixed',height:80,verticalAlign:'bottom'}},c.text))
+                  )
+                ),
+                React.createElement('tbody',null,
+                  cards.map(c1=>React.createElement('tr',{key:c1.id},
+                    React.createElement('td',{style:{padding:'4px 8px',fontWeight:500,color:'#374151',whiteSpace:'nowrap'}},c1.text),
+                    cards.map(c2=>{
+                      if(c1.id===c2.id)return React.createElement('td',{key:c2.id,style:{background:'#f3f4f6',width:28,height:28}});
+                      const cnt=coMatrix[c1.id]?.[c2.id]||0;
+                      const pct=n>0?cnt/n:0;
+                      return React.createElement('td',{key:c2.id,style:{width:28,height:28,textAlign:'center',fontSize:10,background:`rgba(0,172,189,${Math.max(0.03,pct)})`,color:pct>0.5?'white':'#374151',fontWeight:pct>0.4?600:400,border:'1px solid #f9fafb'}},
+                        cnt>0?cnt:''
+                      );
+                    })
+                  ))
+                )
+              )
+            ),
+            // Popular categories
+            topCats.length>0&&React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:8}},'Most common category names created by respondents'),
+              React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},
+                topCats.map(([name,cnt])=>React.createElement('div',{key:name,style:{padding:'6px 12px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:20,fontSize:12,fontWeight:500,color:'#166534'}},
+                  `"${name}" (${cnt})`
+                ))
+              )
+            )
+          );
+        }
       } else if(q.type==='rank'){
         // Compute average rank position for each option (lower = ranked higher)
         const optIds=(q.options||[]).map(o=>o.id);
