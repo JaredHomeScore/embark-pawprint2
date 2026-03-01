@@ -259,7 +259,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
     if(s){if(!s.schema.questions)s.schema.questions=[];setSurvey(s);surveyRef.current=s;if(s.status==='published')setEditWarning(true);}
   },[surveyId]);
 
-  const persist=useCallback((s)=>{
+ const persist=useCallback((s)=>{
     LS.update('surveys',s.id,s);
   },[]);
 
