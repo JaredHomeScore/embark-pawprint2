@@ -162,6 +162,7 @@ const QTYPES=[
   {type:'card_sort_open',label:'Card Sort (Open)',icon:'view_column'},
   {type:'card_sort_closed',label:'Card Sort (Closed)',icon:'view_column'},
   {type:'context_screen',label:'Context Screen',icon:'article'},
+  {type:'prototype_test',label:'Prototype Test (Figma)',icon:'devices'},
 ];
 
 const mkQuestion=type=>({
@@ -186,6 +187,14 @@ const mkQuestion=type=>({
   min:type==='rating'?0:undefined,
   max:type==='rating'?10:undefined,
   max_selections:type==='multiple_select'?null:undefined,
+  // Prototype test fields
+  figma_share_url:type==='prototype_test'?'':undefined,
+  task_prompt:type==='prototype_test'?'':undefined,
+  min_view_time_seconds:type==='prototype_test'?0:undefined,
+  time_limit_seconds:type==='prototype_test'?null:undefined,
+  success_question_enabled:type==='prototype_test'?true:undefined,
+  difficulty_scale_enabled:type==='prototype_test'?true:undefined,
+  open_ended_feedback_enabled:type==='prototype_test'?true:undefined,
   logic:[],
 });
 
@@ -218,9 +227,16 @@ function seedDemo(){
       cards:[{id:'ot1',text:'Coat type',image_url:''},{id:'ot2',text:'Eye color',image_url:''},{id:'ot3',text:'Body size',image_url:''},{id:'ot4',text:'Energy level',image_url:''},{id:'ot5',text:'Trainability',image_url:''},{id:'ot6',text:'Friendliness',image_url:''},{id:'ot7',text:'Shedding',image_url:''},{id:'ot8',text:'Bark tendency',image_url:''},{id:'ot9',text:'Life expectancy',image_url:''},{id:'ot10',text:'Hip dysplasia risk',image_url:''}],
       categories:[],
       logic:[]},
-    // 10. Final context screen
+    // 10. Prototype Test (Figma)
+    {id:'qpt',type:'prototype_test',text:'Test our new Health Dashboard redesign',required:true,
+      figma_share_url:'https://www.figma.com/proto/example123/Embark-Health-Dashboard',
+      task_prompt:'Find your dog\'s hip dysplasia risk score and navigate to the recommended actions page.',
+      min_view_time_seconds:10,time_limit_seconds:180,
+      success_question_enabled:true,difficulty_scale_enabled:true,open_ended_feedback_enabled:true,
+      logic:[]},
+    // 11. Final context screen
     {id:'qcse',type:'context_screen',text:'Almost done!',body:'One last question — we appreciate your time and thoughtfulness.',button_text:'Continue',required:false,logic:[],image_url:''},
-    // 11. Rating (satisfaction 1-5)
+    // 12. Rating (satisfaction 1-5)
     {id:'q9',type:'rating',text:'Overall, how would you rate your experience with this survey?',required:false,min:1,max:5,labels:{min:'Poor',max:'Excellent'},logic:[]},
   ],logic:[]};
 
@@ -330,6 +346,25 @@ function seedDemo(){
     const op=openSortPatterns[Math.floor(Math.random()*openSortPatterns.length)];
     const openVal={categories:{...op.placements},catNames:{...op.catNames},uncategorized:[]};
     LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q8',question_type:'card_sort_open',raw_value:openVal,text_value:JSON.stringify(openVal),numeric_value:null,answered_at:at});
+
+    // QPT: Prototype Test
+    const ptFeedbacks=['The navigation was intuitive but the risk score was hard to find at first.','Loved the new layout! Much cleaner than before.','I wasn\'t sure what the "Recommended Actions" page was called in the nav.','The hip dysplasia section was easy to find, but the recommended actions took a minute.','Very smooth experience overall. The color coding of risk levels was helpful.','A bit confusing — I clicked on the wrong section first.','Great design, but the text was a bit small on mobile.','Found everything quickly. The dashboard is well organized.','The search function would help here, I had to scroll a lot.','Clean and professional look. Some icons could be clearer.','I got lost trying to find the actions page, maybe add breadcrumbs?','Everything was straightforward, no issues at all.'];
+    const ptCompleted=Math.random()>0.2?'yes':'no';
+    const ptDiff=[1,1,2,2,2,3,3,3,3,4,4,5][Math.floor(Math.random()*12)];
+    const ptTimeMs=Math.floor((15+Math.random()*120)*1000);
+    const ptVal={
+      prototype_loaded_at:new Date(Date.now()-Math.random()*1000*60).toISOString(),
+      task_started_at:new Date(Date.now()-ptTimeMs).toISOString(),
+      task_completed_at:new Date().toISOString(),
+      time_in_block_ms:ptTimeMs+Math.floor(Math.random()*5000),
+      time_on_task_ms:ptTimeMs,
+      completion_self_report:ptCompleted,
+      difficulty_rating:ptDiff,
+      open_text_feedback:Math.random()>0.25?ptFeedbacks[Math.floor(Math.random()*ptFeedbacks.length)]:'',
+      device_type:Math.random()>0.3?'desktop':'mobile',
+      viewport_size:Math.random()>0.3?'1440x900':'375x812'
+    };
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'qpt',question_type:'prototype_test',raw_value:ptVal,text_value:JSON.stringify(ptVal),numeric_value:null,answered_at:at});
 
     // Q9: Rating (survey experience 1-5)
     const sexp=Math.floor(3+Math.random()*3);
@@ -708,6 +743,30 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
               q.body&&React.createElement('p',{style:{fontSize:12,color:'var(--gray-600)',whiteSpace:'pre-wrap',marginBottom:8}},q.body.slice(0,100)+(q.body.length>100?'...':'')),
               React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800 px-2.5 py-1.5 text-xs',disabled:true},q.button_text||'Continue')
             ),
+            // Prototype test preview
+            q.type==='prototype_test'&&React.createElement('div',{style:{paddingLeft:26,marginTop:12}},
+              React.createElement('div',{style:{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:8,padding:12}},
+                React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+                  mIcon('devices',{size:18,style:{color:'#0284c7'}}),
+                  React.createElement('span',{className:'text-xs font-semibold text-sky-700'},'Figma Prototype Test')
+                ),
+                q.figma_share_url?React.createElement('div',null,
+                  React.createElement('div',{style:{fontSize:11,color:'#6b7280',marginBottom:4}},'Figma URL:'),
+                  React.createElement('div',{style:{fontSize:12,color:'#0284c7',wordBreak:'break-all',marginBottom:8}},q.figma_share_url),
+                  React.createElement('div',{style:{background:'#e0f2fe',borderRadius:6,padding:'20px 16px',textAlign:'center',fontSize:12,color:'#0369a1'}},mIcon('play_circle',{size:28,style:{color:'#0284c7',display:'block',margin:'0 auto 4px'}}),'Prototype will be embedded here')
+                ):React.createElement('div',{style:{fontSize:12,color:'#9ca3af',fontStyle:'italic'}},'No Figma URL set — configure in settings panel →'),
+                q.task_prompt&&React.createElement('div',{style:{marginTop:8,fontSize:12,color:'#374151',background:'white',border:'1px solid #e5e7eb',borderRadius:6,padding:'6px 10px'}},
+                  React.createElement('strong',null,'Task: '),q.task_prompt
+                ),
+                React.createElement('div',{style:{display:'flex',gap:12,marginTop:8,flexWrap:'wrap'}},
+                  q.success_question_enabled&&React.createElement('span',{style:{fontSize:10,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:10}},'✓ Success Q'),
+                  q.difficulty_scale_enabled&&React.createElement('span',{style:{fontSize:10,color:'#9333ea',background:'#faf5ff',padding:'2px 8px',borderRadius:10}},'✓ Difficulty Scale'),
+                  q.open_ended_feedback_enabled&&React.createElement('span',{style:{fontSize:10,color:'#ea580c',background:'#fff7ed',padding:'2px 8px',borderRadius:10}},'✓ Open Feedback'),
+                  q.min_view_time_seconds>0&&React.createElement('span',{style:{fontSize:10,color:'#6b7280',background:'#f3f4f6',padding:'2px 8px',borderRadius:10}},`Min ${q.min_view_time_seconds}s`),
+                  q.time_limit_seconds&&React.createElement('span',{style:{fontSize:10,color:'#dc2626',background:'#fef2f2',padding:'2px 8px',borderRadius:10}},`Limit ${q.time_limit_seconds}s`)
+                )
+              )
+            ),
             // Rating preview
             q.type==='rating'&&React.createElement('div',{style:{paddingLeft:26}},
               (()=>{const mn=q.min??0,mx=q.max??10,total=mx-mn+1;
@@ -868,6 +927,36 @@ function QSettingsPanel({q,allQ,onUpdate}){
         React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Button Text'),
         React.createElement('input',{type:'text',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',value:q.button_text||'Continue',placeholder:'Continue',onChange:e=>onUpdate({button_text:e.target.value})})
       )
+    ),
+    // Prototype Test settings
+    q.type==='prototype_test'&&React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5'},'Prototype Configuration'),
+      React.createElement('div',{className:'mb-4'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Figma Share URL'),
+        React.createElement('input',{type:'url',className:`w-full px-3 py-2 text-sm border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white ${q.figma_share_url&&!q.figma_share_url.includes('figma.com')?'border-red-300':'border-gray-300'}`,value:q.figma_share_url||'',placeholder:'https://www.figma.com/proto/...',onChange:e=>onUpdate({figma_share_url:e.target.value})}),
+        q.figma_share_url&&!q.figma_share_url.includes('figma.com')&&React.createElement('p',{className:'mt-1 text-xs text-red-500'},'URL must be from figma.com'),
+        React.createElement('p',{className:'mt-1 text-xs text-gray-400'},'Paste a Figma share or prototype link. Make sure sharing is set to "Anyone with the link can view".')
+      ),
+      React.createElement('div',{className:'mb-4'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Task Prompt'),
+        React.createElement('textarea',{className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y',value:q.task_prompt||'',rows:2,placeholder:'e.g. "Try to schedule an appointment for your dog"',onChange:e=>onUpdate({task_prompt:e.target.value})}),
+        React.createElement('p',{className:'mt-1 text-xs text-gray-400'},'Describe what the respondent should try to accomplish in the prototype.')
+      ),
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5 mt-5'},'Timing'),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:14}},
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('label',{className:'block text-xs font-medium text-gray-500 mb-1'},'Min view time (sec)'),
+          React.createElement('input',{type:'number',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',value:q.min_view_time_seconds??0,min:0,onChange:e=>onUpdate({min_view_time_seconds:Number(e.target.value)||0})})
+        ),
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('label',{className:'block text-xs font-medium text-gray-500 mb-1'},'Time limit (sec)'),
+          React.createElement('input',{type:'number',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',value:q.time_limit_seconds||'',placeholder:'No limit',min:0,onChange:e=>onUpdate({time_limit_seconds:e.target.value?Number(e.target.value):null})})
+        )
+      ),
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5 mt-5'},'Follow-up Questions'),
+      React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Did you complete the task? (Yes/No)',checked:q.success_question_enabled!==false,onChange:v=>onUpdate({success_question_enabled:v})})),
+      React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'How difficult was it? (1-5 scale)',checked:q.difficulty_scale_enabled!==false,onChange:v=>onUpdate({difficulty_scale_enabled:v})})),
+      React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Open-ended feedback text box',checked:q.open_ended_feedback_enabled!==false,onChange:v=>onUpdate({open_ended_feedback_enabled:v})}))
     ),
     React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
       React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 px-2.5 py-1.5 text-xs',onClick:()=>setShowLogic(!showLogic)},showLogic?'▲ Hide Logic':'⚡ Display Logic'),
@@ -1047,7 +1136,7 @@ function RespondentView({token}){
     if(isPreviewMode)return; // preview: update UI state but don't write to LS
     if(sessionId){
       const isText=['short_text','paragraph'].includes(q.type);
-      const isNum=q.type==='rating'||['card_sort_open','card_sort_closed','rank'].includes(q.type);
+      const isNum=q.type==='rating'||['card_sort_open','card_sort_closed','rank','prototype_test'].includes(q.type);
       const existing=LS.where('answers',a=>a.session_id===sessionId&&a.question_id===q.id)[0];
       const aData={session_id:sessionId,survey_id:survey.id,question_id:q.id,question_type:q.type,raw_value:value,text_value:isText?value:Array.isArray(value)?value.join(', '):JSON.stringify(value),numeric_value:isNum?null:null,answered_at:now()};
       if(existing)LS.update('answers',existing.id,aData);
@@ -1103,10 +1192,14 @@ function RespondentView({token}){
             const isCS=['card_sort_open','card_sort_closed'].includes(cq?.type);
             const csVal=isCS?answers[cq?.id]:null;
             const csIncomplete=isCS&&(!csVal||!csVal.uncategorized||(csVal.uncategorized&&csVal.uncategorized.length>0));
-            const reqIncomplete=cq?.type!=='context_screen'&&cq?.required&&(answers[cq?.id]===undefined||answers[cq?.id]==='');
-            const isDisabled=csIncomplete||reqIncomplete;
+            const isPT=cq?.type==='prototype_test';
+            const ptVal=isPT?answers[cq?.id]:null;
+            const ptIncomplete=isPT&&(!ptVal||!ptVal.task_completed_at);
+            const reqIncomplete=cq?.type!=='context_screen'&&cq?.type!=='prototype_test'&&cq?.required&&(answers[cq?.id]===undefined||answers[cq?.id]==='');
+            const isDisabled=csIncomplete||ptIncomplete||reqIncomplete;
             return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}},
               isCS&&csIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please sort all cards into categories before continuing'),
+              isPT&&ptIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please complete the prototype test before continuing'),
               React.createElement('button',{
                 className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:isDisabled?'#9ca3af':brand,cursor:isDisabled?'not-allowed':'pointer'},onClick:isDisabled?undefined:goNext,
                 disabled:isDisabled
@@ -1246,7 +1339,206 @@ function QCard({question:q,value,onChange,brand}){
     ['short_text','paragraph'].includes(q.type)&&React.createElement('input',{type:'text',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',style:{marginTop:12},value:value||'',placeholder:q.placeholder||'',onChange:e=>onChange(q,e.target.value)}),
     q.type==='rank'&&React.createElement(RankWidget,{q,value,onChange,brand}),
     q.type==='rating'&&React.createElement(RatingWidget,{q,value,onChange,brand}),
-    ['card_sort_open','card_sort_closed'].includes(q.type)&&React.createElement(CardSortWidget,{q,value,onChange,brand})
+    ['card_sort_open','card_sort_closed'].includes(q.type)&&React.createElement(CardSortWidget,{q,value,onChange,brand}),
+    q.type==='prototype_test'&&React.createElement(PrototypeTestWidget,{q,value,onChange,brand})
+  );
+}
+
+// ── PROTOTYPE TEST WIDGET (Respondent) ───────────────────────────────────────
+function PrototypeTestWidget({q,value,onChange,brand}){
+  const val=value&&typeof value==='object'?value:{};
+  const[phase,setPhase]=useState(val.task_completed_at?'followup':'idle'); // idle → testing → followup
+  const[elapsed,setElapsed]=useState(0);
+  const[iframeLoaded,setIframeLoaded]=useState(false);
+  const[isFullscreen,setIsFullscreen]=useState(false);
+  const timerRef=useRef(null);
+  const startRef=useRef(null);
+  const minTime=q.min_view_time_seconds||0;
+  const timeLimit=q.time_limit_seconds||0;
+
+  // Build embed URL from Figma share URL
+  const figmaEmbedUrl=useMemo(()=>{
+    const url=q.figma_share_url||'';
+    if(!url.includes('figma.com'))return null;
+    // Convert share/proto/design URLs to embed format
+    const cleaned=url.replace(/\/(proto|design|file)\//,'/embed/');
+    if(cleaned.includes('/embed/'))return cleaned+(cleaned.includes('?')?'&':'?')+'embed_host=share&footer=false&bottombar=false';
+    // Fallback: wrap in iframe embed URL
+    return 'https://www.figma.com/embed?embed_host=share&url='+encodeURIComponent(url);
+  },[q.figma_share_url]);
+
+  const update=(patch)=>{
+    const next={...val,...patch};
+    onChange(q,next);
+  };
+
+  const startTask=()=>{
+    const now=Date.now();
+    startRef.current=now;
+    setPhase('testing');
+    setElapsed(0);
+    update({
+      task_started_at:new Date(now).toISOString(),
+      prototype_loaded_at:iframeLoaded?new Date().toISOString():null,
+      device_type:/Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop',
+      viewport_size:`${window.innerWidth}x${window.innerHeight}`
+    });
+    timerRef.current=setInterval(()=>{
+      const el=Math.floor((Date.now()-now)/1000);
+      setElapsed(el);
+      if(timeLimit>0&&el>=timeLimit){
+        clearInterval(timerRef.current);
+        finishTask(now);
+      }
+    },1000);
+  };
+
+  const finishTask=(startOverride)=>{
+    clearInterval(timerRef.current);
+    const start=startOverride||startRef.current||Date.now();
+    const nowMs=Date.now();
+    setPhase('followup');
+    update({
+      task_completed_at:new Date(nowMs).toISOString(),
+      time_on_task_ms:nowMs-start,
+      time_in_block_ms:nowMs-start
+    });
+  };
+
+  useEffect(()=>()=>clearInterval(timerRef.current),[]);
+
+  const formatTime=(s)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const canContinue=elapsed>=minTime;
+
+  if(!figmaEmbedUrl){
+    return React.createElement('div',{style:{padding:20,textAlign:'center',color:'#ef4444'}},
+      mIcon('error_outline',{size:32,style:{display:'block',margin:'0 auto 8px'}}),
+      React.createElement('p',{style:{fontWeight:600,marginBottom:4}},'No valid Figma URL'),
+      React.createElement('p',{style:{fontSize:13,color:'#6b7280'}},'The survey creator has not provided a valid Figma prototype link.')
+    );
+  }
+
+  // Phase: idle — show task prompt and Start button
+  if(phase==='idle'){
+    return React.createElement('div',null,
+      q.task_prompt&&React.createElement('div',{style:{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:10,padding:'14px 18px',marginBottom:16}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:6}},
+          mIcon('assignment',{size:18,style:{color:'#0284c7'}}),
+          React.createElement('span',{style:{fontWeight:600,fontSize:14,color:'#0c4a6e'}},'Your Task')
+        ),
+        React.createElement('p',{style:{fontSize:14,color:'#334155',lineHeight:1.5}},q.task_prompt)
+      ),
+      React.createElement('div',{style:{border:'2px dashed #d1d5db',borderRadius:12,padding:'32px 20px',textAlign:'center',background:'#fafafa',marginBottom:12}},
+        mIcon('play_circle',{size:48,style:{color:brand||'#0284c7',display:'block',margin:'0 auto 12px'}}),
+        React.createElement('p',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:6}},'Ready to start?'),
+        React.createElement('p',{style:{fontSize:13,color:'#6b7280',marginBottom:16}},'A Figma prototype will load below. Take your time exploring it.'),
+        React.createElement('button',{
+          onClick:startTask,
+          style:{background:brand||'#0284c7',color:'white',border:'none',padding:'10px 28px',borderRadius:10,fontSize:15,fontWeight:600,cursor:'pointer',transition:'all .15s'}
+        },'Start Task')
+      ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',gap:16,fontSize:12,color:'#9ca3af',marginTop:4}},
+        minTime>0&&React.createElement('span',null,`Min. ${minTime}s viewing time`),
+        timeLimit>0&&React.createElement('span',null,`Time limit: ${formatTime(timeLimit)}`)
+      )
+    );
+  }
+
+  // Phase: testing — show iframe + timer + Done button
+  if(phase==='testing'){
+    const iframeContainer=React.createElement('div',{style:{position:'relative',borderRadius:isFullscreen?0:12,overflow:'hidden',border:isFullscreen?'none':'1px solid #e5e7eb',background:'#f3f4f6',
+      ...(isFullscreen?{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,borderRadius:0}:{})
+    }},
+      // Timer bar
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 14px',background:'#111827',color:'white',fontSize:13}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+          mIcon('timer',{size:16,style:{color:canContinue?'#4ade80':'#fbbf24'}}),
+          React.createElement('span',{style:{fontWeight:600,fontVariantNumeric:'tabular-nums'}},formatTime(elapsed)),
+          timeLimit>0&&React.createElement('span',{style:{color:'#9ca3af',fontSize:11}},` / ${formatTime(timeLimit)}`)
+        ),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:()=>setIsFullscreen(!isFullscreen),style:{background:'transparent',border:'1px solid #4b5563',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:4}},
+            mIcon(isFullscreen?'fullscreen_exit':'fullscreen',{size:14}),isFullscreen?'Exit':'Fullscreen'
+          ),
+          React.createElement('a',{href:q.figma_share_url,target:'_blank',rel:'noopener noreferrer',style:{background:'transparent',border:'1px solid #4b5563',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,textDecoration:'none',display:'flex',alignItems:'center',gap:4}},
+            mIcon('open_in_new',{size:14}),'Open in tab'
+          )
+        )
+      ),
+      // Iframe
+      React.createElement('iframe',{
+        src:figmaEmbedUrl,
+        onLoad:()=>setIframeLoaded(true),
+        style:{width:'100%',height:isFullscreen?'calc(100vh - 44px)':500,border:'none',display:'block'},
+        allowFullScreen:true,
+        loading:'lazy'
+      }),
+      // Progress bar for min time
+      minTime>0&&!canContinue&&React.createElement('div',{style:{height:3,background:'#e5e7eb'}},
+        React.createElement('div',{style:{height:'100%',background:'#fbbf24',width:`${Math.min(100,(elapsed/minTime)*100)}%`,transition:'width 1s linear'}})
+      )
+    );
+
+    return React.createElement('div',null,
+      q.task_prompt&&React.createElement('div',{style:{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:13,color:'#0c4a6e'}},
+        React.createElement('strong',null,'Task: '),q.task_prompt
+      ),
+      iframeContainer,
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',marginTop:16}},
+        React.createElement('button',{
+          onClick:()=>finishTask(),
+          disabled:!canContinue,
+          style:{background:canContinue?(brand||'#0284c7'):'#9ca3af',color:'white',border:'none',padding:'10px 28px',borderRadius:10,fontSize:15,fontWeight:600,cursor:canContinue?'pointer':'not-allowed',transition:'all .15s',opacity:canContinue?1:0.7}
+        },canContinue?'I\'m Done — Continue':'Wait '+formatTime(minTime-elapsed)+'...')
+      )
+    );
+  }
+
+  // Phase: followup — success, difficulty, feedback
+  return React.createElement('div',null,
+    React.createElement('div',{style:{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:10,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10}},
+      mIcon('check_circle',{size:20,style:{color:'#16a34a'}}),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontWeight:600,fontSize:14,color:'#166534'}},'Prototype interaction complete'),
+        val.time_on_task_ms&&React.createElement('div',{style:{fontSize:12,color:'#4ade80'}},`Time spent: ${Math.round(val.time_on_task_ms/1000)}s`)
+      )
+    ),
+    q.success_question_enabled!==false&&React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:10}},'Did you complete the task?'),
+      React.createElement('div',{style:{display:'flex',gap:10}},
+        ['Yes','No'].map(opt=>React.createElement('button',{key:opt,onClick:()=>update({completion_self_report:opt.toLowerCase()}),
+          style:{flex:1,padding:'12px 16px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',transition:'all .15s',
+            border:val.completion_self_report===opt.toLowerCase()?`2px solid ${brand||'#0284c7'}`:'2px solid #e5e7eb',
+            background:val.completion_self_report===opt.toLowerCase()?(brand||'#0284c7')+'15':'white',
+            color:val.completion_self_report===opt.toLowerCase()?(brand||'#0284c7'):'#374151'
+          }
+        },opt))
+      )
+    ),
+    q.difficulty_scale_enabled!==false&&React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:10}},'How difficult was it?'),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        [1,2,3,4,5].map(n=>React.createElement('button',{key:n,onClick:()=>update({difficulty_rating:n}),
+          style:{width:52,height:52,borderRadius:12,fontSize:18,fontWeight:700,cursor:'pointer',transition:'all .15s',
+            border:val.difficulty_rating===n?`2px solid ${brand||'#0284c7'}`:'2px solid #e5e7eb',
+            background:val.difficulty_rating===n?(brand||'#0284c7'):'white',
+            color:val.difficulty_rating===n?'white':'#374151'
+          }
+        },n))
+      ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,color:'#9ca3af',marginTop:6}},
+        React.createElement('span',null,'Very easy'),
+        React.createElement('span',null,'Very hard')
+      )
+    ),
+    q.open_ended_feedback_enabled!==false&&React.createElement('div',{style:{marginBottom:12}},
+      React.createElement('div',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:10}},'What was confusing or could be improved?'),
+      React.createElement('textarea',{
+        className:'w-full px-3 py-3 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',
+        rows:3,value:val.open_text_feedback||'',placeholder:'Share your thoughts...',
+        onChange:e=>update({open_text_feedback:e.target.value})
+      })
+    )
   );
 }
 
@@ -1923,6 +2215,97 @@ function QuestionCharts({survey}){
               React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out',style:{width:`${(1-(item.avg-1)/(worst))*100}%`,background:'#00ACBD'}})
             )
           ))
+        );
+      } else if(q.type==='prototype_test'){
+        // Prototype Test Analytics
+        const parsed=answers.map(a=>{const rv=a.raw_value;return rv&&typeof rv==='object'?rv:null;}).filter(Boolean);
+        const n=parsed.length;
+        // Success rate
+        const yesCount=parsed.filter(r=>r.completion_self_report==='yes').length;
+        const noCount=parsed.filter(r=>r.completion_self_report==='no').length;
+        const successRate=n>0?Math.round((yesCount/n)*100):0;
+        // Average time on task
+        const times=parsed.filter(r=>r.time_on_task_ms>0).map(r=>r.time_on_task_ms);
+        const avgTime=times.length>0?Math.round(times.reduce((a,b)=>a+b,0)/times.length/1000):0;
+        const medianTime=times.length>0?Math.round(times.sort((a,b)=>a-b)[Math.floor(times.length/2)]/1000):0;
+        // Difficulty distribution
+        const diffDist={1:0,2:0,3:0,4:0,5:0};
+        parsed.forEach(r=>{if(r.difficulty_rating>=1&&r.difficulty_rating<=5)diffDist[r.difficulty_rating]++;});
+        const diffRatings=parsed.filter(r=>r.difficulty_rating>=1&&r.difficulty_rating<=5);
+        const avgDiff=diffRatings.length>0?(diffRatings.reduce((a,r)=>a+r.difficulty_rating,0)/diffRatings.length).toFixed(1):'-';
+        // Feedback texts
+        const feedbackTexts=parsed.filter(r=>r.open_text_feedback&&r.open_text_feedback.trim()).map(r=>r.open_text_feedback.trim());
+        const diffLabels={1:'Very Easy',2:'Easy',3:'Moderate',4:'Hard',5:'Very Hard'};
+        const diffColors={1:'#16a34a',2:'#65a30d',3:'#ca8a04',4:'#ea580c',5:'#dc2626'};
+
+        content=React.createElement('div',null,
+          // Summary metrics row
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
+            React.createElement('div',{style:{background:'#f0fdf4',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#16a34a'}},`${successRate}%`),
+              React.createElement('div',{style:{fontSize:11,color:'#4ade80',fontWeight:600,marginTop:2}},'Success Rate'),
+              React.createElement('div',{style:{fontSize:10,color:'#86efac'}},`${yesCount}/${n} completed`)
+            ),
+            React.createElement('div',{style:{background:'#f0f9ff',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#0284c7'}},`${avgTime}s`),
+              React.createElement('div',{style:{fontSize:11,color:'#38bdf8',fontWeight:600,marginTop:2}},'Avg Time on Task'),
+              React.createElement('div',{style:{fontSize:10,color:'#7dd3fc'}},`Median: ${medianTime}s`)
+            ),
+            React.createElement('div',{style:{background:'#faf5ff',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#9333ea'}},avgDiff),
+              React.createElement('div',{style:{fontSize:11,color:'#c084fc',fontWeight:600,marginTop:2}},'Avg Difficulty'),
+              React.createElement('div',{style:{fontSize:10,color:'#d8b4fe'}},`1=Easy, 5=Hard`)
+            ),
+            React.createElement('div',{style:{background:'#fff7ed',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#ea580c'}},feedbackTexts.length),
+              React.createElement('div',{style:{fontSize:11,color:'#fb923c',fontWeight:600,marginTop:2}},'Feedback Comments'),
+              React.createElement('div',{style:{fontSize:10,color:'#fdba74'}},`of ${n} respondents`)
+            )
+          ),
+          // Difficulty distribution bars
+          diffRatings.length>0&&React.createElement('div',{style:{marginBottom:20}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:10}},'Difficulty Distribution'),
+            [1,2,3,4,5].map(d=>React.createElement('div',{key:d,className:'mb-2'},
+              React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},
+                React.createElement('span',{style:{color:diffColors[d],fontWeight:500}},`${d} — ${diffLabels[d]}`),
+                React.createElement('span',{style:{color:'#6b7280'}},`${diffDist[d]} (${n>0?Math.round(diffDist[d]/n*100):0}%)`)
+              ),
+              React.createElement('div',{className:'h-4 bg-gray-100 rounded overflow-hidden'},
+                React.createElement('div',{style:{height:'100%',borderRadius:4,background:diffColors[d],width:`${n>0?diffDist[d]/n*100:0}%`,transition:'width .3s'}})
+              )
+            ))
+          ),
+          // Time distribution (histogram-like)
+          times.length>0&&React.createElement('div',{style:{marginBottom:20}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:10}},'Time on Task Distribution'),
+            React.createElement('div',{style:{display:'flex',gap:4,alignItems:'flex-end',height:80}},
+              (()=>{
+                const sorted=[...times].sort((a,b)=>a-b);
+                const bucketSize=Math.max(5000,Math.ceil((sorted[sorted.length-1]-sorted[0])/10/1000)*1000);
+                const minT=sorted[0];
+                const buckets={};
+                sorted.forEach(t=>{const b=Math.floor((t-minT)/bucketSize);buckets[b]=(buckets[b]||0)+1;});
+                const maxB=Math.max(...Object.values(buckets),1);
+                const numBuckets=Math.max(...Object.keys(buckets).map(Number))+1;
+                return Array.from({length:numBuckets},(_,i)=>{
+                  const cnt=buckets[i]||0;
+                  const label=Math.round((minT+i*bucketSize)/1000)+'s';
+                  return React.createElement('div',{key:i,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
+                    React.createElement('div',{style:{width:'100%',height:`${(cnt/maxB)*60}px`,background:'#0284c7',borderRadius:'3px 3px 0 0',minHeight:cnt>0?4:0,transition:'height .3s'}}),
+                    React.createElement('span',{style:{fontSize:9,color:'#9ca3af'}},label)
+                  );
+                });
+              })()
+            )
+          ),
+          // Feedback comments
+          feedbackTexts.length>0&&React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:10}},`Feedback Comments (${feedbackTexts.length})`),
+            feedbackTexts.slice(0,10).map((txt,i)=>React.createElement('div',{key:i,style:{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:8,padding:'10px 14px',marginBottom:6,fontSize:13,color:'#374151',lineHeight:1.5}},
+              React.createElement('span',{style:{color:'#9ca3af',fontWeight:600,marginRight:6}},`R${i+1}`),txt
+            )),
+            feedbackTexts.length>10&&React.createElement('div',{style:{fontSize:12,color:'#9ca3af',textAlign:'center',marginTop:8}},`+${feedbackTexts.length-10} more comments`)
+          )
         );
       }
       return React.createElement('div',{key:q.id,className:'bg-white rounded-lg border border-gray-200 shadow-sm mb-4'},
