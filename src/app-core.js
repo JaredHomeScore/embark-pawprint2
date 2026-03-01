@@ -192,52 +192,158 @@ const mkQuestion=type=>({
 // ── SEED DEMO DATA ────────────────────────────────────────────────────────────
 function seedDemo(){
   const sid=uid();
+  // ── Questions covering ALL types ──
   const schema={questions:[
-    {id:'q1',type:'single_choice',text:'How satisfied are you with your Embark experience overall?',required:true,options:[{id:'o1',text:'Very satisfied'},{id:'o2',text:'Satisfied'},{id:'o3',text:'Neutral'},{id:'o4',text:'Dissatisfied'},{id:'o5',text:'Very dissatisfied'}],logic:[],has_other:false,randomize_options:false},
-    {id:'q2',type:'multiple_select',text:'Which Embark features do you use most often?',required:false,options:[{id:'o1',text:'Health Reports'},{id:'o2',text:'DNA Testing'},{id:'o3',text:'Breed Info'},{id:'o4',text:'Vet Connect'},{id:'o5',text:'Community Forum'}],logic:[],has_other:false,randomize_options:false},
+    // 1. Context Screen (intro)
+    {id:'qcs',type:'context_screen',text:'Welcome to the Embark UX Research Study',body:'This study covers your overall experience with Embark\'s products and services. It includes a mix of question types and should take about 5 minutes.\n\nYour responses are anonymous and will help shape the future of Embark.',button_text:'Let\'s Go!',required:false,logic:[],image_url:''},
+    // 2. Single Choice
+    {id:'q1',type:'single_choice',text:'How satisfied are you with your Embark experience overall?',required:true,options:[{id:'o1',text:'Very satisfied'},{id:'o2',text:'Satisfied'},{id:'o3',text:'Neutral'},{id:'o4',text:'Dissatisfied'},{id:'o5',text:'Very dissatisfied'}],logic:[],has_other:false,randomize_options:false,helper_text:'Select the one that best describes your experience.'},
+    // 3. Multiple Select
+    {id:'q2',type:'multiple_select',text:'Which Embark features do you use most often?',required:false,options:[{id:'f1',text:'Health Reports'},{id:'f2',text:'DNA & Breed ID'},{id:'f3',text:'Relative Finder'},{id:'f4',text:'Vet Connect'},{id:'f5',text:'Community Forum'},{id:'f6',text:'Trait Insights'}],logic:[],has_other:true,randomize_options:false,helper_text:'Select all that apply.',max_selections:null},
+    // 4. Rating (NPS style)
     {id:'q3',type:'rating',text:'How likely are you to recommend Embark to a friend or family member?',required:true,min:0,max:10,labels:{min:'Not at all likely',max:'Extremely likely'},logic:[]},
-    {id:'q4',type:'long_text',text:'What do you love most about Embark? Any feedback or suggestions?',required:false,placeholder:'Share your thoughts...',logic:[]},
+    // 5. Short Text
+    {id:'q4',type:'short_text',text:'In a few words, what is your favorite thing about Embark?',required:false,placeholder:'e.g. breed accuracy, health insights...',logic:[],helper_text:''},
+    // 6. Paragraph / Long Text
+    {id:'q5',type:'paragraph',text:'What improvements would you suggest for Embark\'s products or services?',required:false,placeholder:'Share any feedback, ideas, or pain points...',logic:[],helper_text:'Be as detailed as you like.'},
+    // 7. Rank Order
+    {id:'q6',type:'rank',text:'Rank the following product areas by how important they are to you.',required:true,options:[{id:'r1',text:'Breed Accuracy'},{id:'r2',text:'Health Screening'},{id:'r3',text:'Speed of Results'},{id:'r4',text:'Price/Value'},{id:'r5',text:'Customer Support'}],logic:[],randomize_options:false},
+    // 8. Card Sort (Closed)
+    {id:'q7',type:'card_sort_closed',text:'Sort these features into the category that best describes them.',required:true,
+      cards:[{id:'cs1',text:'DNA Breed ID',image_url:''},{id:'cs2',text:'Health Risk Report',image_url:''},{id:'cs3',text:'Relative Finder',image_url:''},{id:'cs4',text:'Trait Predictions',image_url:''},{id:'cs5',text:'Vet Consult Chat',image_url:''},{id:'cs6',text:'Ancestry Timeline',image_url:''},{id:'cs7',text:'Weight Predictor',image_url:''},{id:'cs8',text:'Genetic Diversity Score',image_url:''}],
+      categories:[{id:'cat1',name:'Core Science'},{id:'cat2',name:'Health & Wellness'},{id:'cat3',name:'Social & Fun'}],
+      logic:[]},
+    // 9. Card Sort (Open)
+    {id:'q8',type:'card_sort_open',text:'Group these dog traits into categories that make sense to you.',required:true,
+      cards:[{id:'ot1',text:'Coat type',image_url:''},{id:'ot2',text:'Eye color',image_url:''},{id:'ot3',text:'Body size',image_url:''},{id:'ot4',text:'Energy level',image_url:''},{id:'ot5',text:'Trainability',image_url:''},{id:'ot6',text:'Friendliness',image_url:''},{id:'ot7',text:'Shedding',image_url:''},{id:'ot8',text:'Bark tendency',image_url:''},{id:'ot9',text:'Life expectancy',image_url:''},{id:'ot10',text:'Hip dysplasia risk',image_url:''}],
+      categories:[],
+      logic:[]},
+    // 10. Final context screen
+    {id:'qcse',type:'context_screen',text:'Almost done!',body:'One last question — we appreciate your time and thoughtfulness.',button_text:'Continue',required:false,logic:[],image_url:''},
+    // 11. Rating (satisfaction 1-5)
+    {id:'q9',type:'rating',text:'Overall, how would you rate your experience with this survey?',required:false,min:1,max:5,labels:{min:'Poor',max:'Excellent'},logic:[]},
   ],logic:[]};
-  const token='demo'+uid().slice(0,10);
-  LS.insert('surveys',{id:sid,title:'Embark Customer Satisfaction Survey',description:'Help us understand your experience so we can keep improving.',status:'published',version:1,schema,branding:{primary_color:'#FFCE34'},thank_you_msg:'Thank you for your feedback!',thank_you_next:'',est_minutes:3,collect_email:1,show_progress:1,allow_back:1,allow_anonymous:1,token,created_at:now(),updated_at:now()});
 
-  const satOpts=['Very satisfied','Satisfied','Satisfied','Satisfied','Neutral','Dissatisfied'];
-  const featOpts=['Health Reports','DNA Testing','Breed Info','Vet Connect','Community Forum'];
-  const openTexts=[
-    'The DNA testing results were incredibly detailed and informative.',
-    'I love how easy it is to understand my dog\'s health risks.',
-    'The breed breakdown was fascinating and matched my dog perfectly.',
-    'Customer support was very helpful when I had questions.',
-    'The health reports give me peace of mind about my pet\'s future.',
-    'Would love more vet recommendations based on genetic results.',
-    'The interface is clean but could use better mobile optimization.',
-    'Amazing product — it changed how I understand my dog\'s needs.',
-    'Wish there were more educational resources about rare breeds.',
-    'Very accurate predictions, impressed with the science behind it.',
-    'Great customer service experience overall.',
-    'The DNA breakdown is fascinating and very detailed.',
-    'I appreciate the health screening information provided.',
-    'Would be nice to track changes in health over time.',
-    'My vet was impressed by the detailed breed analysis.',
+  const token='demo'+uid().slice(0,10);
+  LS.insert('surveys',{id:sid,title:'Embark Full Experience Study',description:'A comprehensive research study covering satisfaction, feature usage, card sorts, rankings, and open feedback.',status:'published',version:1,schema,branding:{primary_color:'#FFCE34'},thank_you_msg:'Thank you for your feedback!',thank_you_next:'Your responses will help shape the future of Embark products.',est_minutes:5,collect_email:1,show_progress:1,allow_back:1,allow_anonymous:1,token,created_at:now(),updated_at:now()});
+
+  // ── Generate 55 respondents ──
+  const satOpts=['Very satisfied','Very satisfied','Satisfied','Satisfied','Satisfied','Satisfied','Neutral','Neutral','Dissatisfied','Very dissatisfied'];
+  const featPool=['Health Reports','DNA & Breed ID','Relative Finder','Vet Connect','Community Forum','Trait Insights'];
+  const shortTexts=['Breed accuracy','Health insights','Easy to use','Great science','Relative finder is cool','Love the trait info','Customer support','Detailed results','Fast turnaround','Fun to explore','Genetic diversity data','Vet integration','Community aspect','Ancestry info','Value for money'];
+  const longTexts=[
+    'The DNA testing results were incredibly detailed and informative. I learned so much about my mixed breed.',
+    'I love how easy it is to understand my dog\'s health risks. The reports are clear and actionable.',
+    'The breed breakdown was fascinating and matched my dog perfectly. We always suspected some Lab in there!',
+    'Customer support was very helpful when I had questions about the health screening results.',
+    'The health reports give me peace of mind about my pet\'s future. Already shared with our vet.',
+    'Would love more vet recommendations based on genetic results. The current ones are a bit generic.',
+    'The interface is clean but could use better mobile optimization. Hard to read charts on my phone.',
+    'Amazing product — it changed how I understand my dog\'s needs. Worth every penny.',
+    'Wish there were more educational resources about rare breeds. My dog has some unusual ancestry.',
+    'Very accurate predictions, impressed with the science behind it. The research papers linked are great.',
+    'Great customer service experience overall. Quick response times and knowledgeable staff.',
+    'I appreciate the health screening but would love more detail on dietary recommendations.',
+    'Would be nice to track changes in health markers over time with annual re-testing.',
+    'My vet was impressed by the detailed breed analysis. Uses it for care planning now.',
+    'The relative finder feature connected us with another owner of our dog\'s sibling — incredible!',
+    'Results took a bit longer than expected but the depth of information made up for it.',
+    'The trait predictions were spot on — our dog\'s coat, size, and energy level all matched.',
+    'Price seems high compared to competitors but quality and depth justify it in my opinion.',
+    'Love the new ancestry timeline feature. Seeing the breed history visually is really engaging.',
+    'The genetic diversity score was a nice touch. Hadn\'t seen that from other testing services.',
   ];
-  for(let i=0;i<50;i++){
+  // Closed card sort: realistic placements of 8 cards into 3 categories
+  const closedSortPatterns=[
+    // Pattern A: most common grouping
+    {cat1:['cs1','cs6','cs8'],cat2:['cs2','cs5','cs7'],cat3:['cs3','cs4']},
+    // Pattern B: slight variation
+    {cat1:['cs1','cs4','cs8'],cat2:['cs2','cs5','cs7'],cat3:['cs3','cs6']},
+    // Pattern C
+    {cat1:['cs1','cs6'],cat2:['cs2','cs5','cs7','cs8'],cat3:['cs3','cs4']},
+    // Pattern D
+    {cat1:['cs1','cs8'],cat2:['cs2','cs4','cs5','cs7'],cat3:['cs3','cs6']},
+    // Pattern E
+    {cat1:['cs1','cs4','cs6','cs8'],cat2:['cs2','cs5','cs7'],cat3:['cs3']},
+  ];
+  // Open card sort: respondents create their own categories
+  const openSortPatterns=[
+    {catNames:{oc1:'Appearance',oc2:'Behavior',oc3:'Health'},placements:{oc1:['ot1','ot2','ot3','ot7'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot9','ot10']}},
+    {catNames:{oc1:'Physical Traits',oc2:'Personality',oc3:'Medical'},placements:{oc1:['ot1','ot2','ot3','ot7'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot9','ot10']}},
+    {catNames:{oc1:'Looks',oc2:'Temperament',oc3:'Health Risks'},placements:{oc1:['ot1','ot2','ot3'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot7','ot9','ot10']}},
+    {catNames:{oc1:'Appearance',oc2:'Behavior & Energy',oc3:'Health & Lifespan'},placements:{oc1:['ot1','ot2','ot3','ot7'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot9','ot10']}},
+    {catNames:{oc1:'Physical',oc2:'Mental',oc3:'Medical',oc4:'Grooming'},placements:{oc1:['ot2','ot3'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot9','ot10'],oc4:['ot1','ot7']}},
+    {catNames:{oc1:'Body',oc2:'Personality',oc3:'Health'},placements:{oc1:['ot1','ot2','ot3','ot7'],oc2:['ot4','ot5','ot6','ot8'],oc3:['ot9','ot10']}},
+    {catNames:{oc1:'Visual Traits',oc2:'Behavioral Traits',oc3:'Wellness'},placements:{oc1:['ot1','ot2','ot3'],oc2:['ot4','ot5','ot6','ot7','ot8'],oc3:['ot9','ot10']}},
+  ];
+  const rankIds=['r1','r2','r3','r4','r5'];
+
+  for(let i=0;i<55;i++){
     const sessId=uid();
-    const start=new Date(Date.now()-Math.random()*30*24*60*60*1000);
-    const ms=Math.floor(80000+Math.random()*280000);
-    const session={id:sessId,survey_id:sid,survey_version:1,status:'completed',device_type:Math.random()>.4?'mobile':'desktop',browser:Math.random()>.5?'Chrome':'Safari',completion_ms:ms,started_at:start.toISOString(),submitted_at:new Date(start.getTime()+ms).toISOString(),respondent_email:null,last_question_idx:3};
+    const daysAgo=Math.random()*30;
+    const start=new Date(Date.now()-daysAgo*24*60*60*1000);
+    const ms=Math.floor(120000+Math.random()*360000);
+    const submitted=new Date(start.getTime()+ms);
+    const session={id:sessId,survey_id:sid,survey_version:1,status:'completed',device_type:Math.random()>.4?'mobile':'desktop',browser:Math.random()>.5?'Chrome':'Safari',completion_ms:ms,started_at:start.toISOString(),submitted_at:submitted.toISOString(),respondent_email:Math.random()>.7?`user${i}@example.com`:null,last_question_idx:schema.questions.length-1};
     LS.insert('sessions',session);
+    const at=submitted.toISOString();
+
+    // Q1: Single Choice
     const sat=satOpts[Math.floor(Math.random()*satOpts.length)];
-    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q1',question_type:'single_choice',raw_value:sat,text_value:sat,numeric_value:null,answered_at:session.submitted_at});
-    const nf=1+Math.floor(Math.random()*3);
-    const feats=[...featOpts].sort(()=>Math.random()-.5).slice(0,nf);
-    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q2',question_type:'multiple_select',raw_value:feats,text_value:feats.join(', '),numeric_value:null,answered_at:session.submitted_at});
-    const rating=Math.floor(6+Math.random()*5);
-    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q3',question_type:'rating',raw_value:rating,text_value:String(rating),numeric_value:rating,answered_at:session.submitted_at});
-    if(Math.random()>.3){
-      const txt=openTexts[Math.floor(Math.random()*openTexts.length)];
-      LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q4',question_type:'long_text',raw_value:txt,text_value:txt,numeric_value:null,answered_at:session.submitted_at});
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q1',question_type:'single_choice',raw_value:sat,text_value:sat,numeric_value:null,answered_at:at});
+
+    // Q2: Multiple Select
+    const nf=1+Math.floor(Math.random()*4);
+    const feats=[...featPool].sort(()=>Math.random()-.5).slice(0,nf);
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q2',question_type:'multiple_select',raw_value:feats,text_value:feats.join(', '),numeric_value:null,answered_at:at});
+
+    // Q3: Rating (NPS 0-10)
+    const nps=Math.floor(Math.random()<.15?Math.random()*5:5+Math.random()*6);
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q3',question_type:'rating',raw_value:nps,text_value:String(nps),numeric_value:nps,answered_at:at});
+
+    // Q4: Short Text
+    if(Math.random()>.2){
+      const st=shortTexts[Math.floor(Math.random()*shortTexts.length)];
+      LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q4',question_type:'short_text',raw_value:st,text_value:st,numeric_value:null,answered_at:at});
     }
+
+    // Q5: Paragraph
+    if(Math.random()>.25){
+      const lt=longTexts[Math.floor(Math.random()*longTexts.length)];
+      LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q5',question_type:'paragraph',raw_value:lt,text_value:lt,numeric_value:null,answered_at:at});
+    }
+
+    // Q6: Rank Order (shuffle to simulate different orderings with bias)
+    const ranked=[...rankIds];
+    // Bias: r2 (Health Screening) and r1 (Breed Accuracy) tend to rank high
+    for(let j=ranked.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));[ranked[j],ranked[k]]=[ranked[k],ranked[j]];}
+    if(Math.random()>.5&&ranked.indexOf('r2')>1){const idx=ranked.indexOf('r2');ranked.splice(idx,1);ranked.unshift('r2');}
+    if(Math.random()>.6&&ranked.indexOf('r1')>1){const idx=ranked.indexOf('r1');ranked.splice(idx,1);ranked.splice(1,0,'r1');}
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q6',question_type:'rank',raw_value:ranked,text_value:ranked.join(', '),numeric_value:null,answered_at:at});
+
+    // Q7: Card Sort (Closed)
+    const cp=closedSortPatterns[Math.floor(Math.random()*closedSortPatterns.length)];
+    const closedVal={categories:{cat1:[...cp.cat1],cat2:[...cp.cat2],cat3:[...cp.cat3]},catNames:{},uncategorized:[]};
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q7',question_type:'card_sort_closed',raw_value:closedVal,text_value:JSON.stringify(closedVal),numeric_value:null,answered_at:at});
+
+    // Q8: Card Sort (Open)
+    const op=openSortPatterns[Math.floor(Math.random()*openSortPatterns.length)];
+    const openVal={categories:{...op.placements},catNames:{...op.catNames},uncategorized:[]};
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q8',question_type:'card_sort_open',raw_value:openVal,text_value:JSON.stringify(openVal),numeric_value:null,answered_at:at});
+
+    // Q9: Rating (survey experience 1-5)
+    const sexp=Math.floor(3+Math.random()*3);
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'q9',question_type:'rating',raw_value:sexp,text_value:String(sexp),numeric_value:sexp,answered_at:at});
   }
+
+  // Add a few partial/in-progress sessions for drop-off data
+  for(let i=0;i<8;i++){
+    const sessId=uid();
+    const start=new Date(Date.now()-Math.random()*14*24*60*60*1000);
+    const dropIdx=Math.floor(Math.random()*6);
+    LS.insert('sessions',{id:sessId,survey_id:sid,survey_version:1,status:'in_progress',device_type:Math.random()>.5?'mobile':'desktop',browser:'Chrome',started_at:start.toISOString(),last_question_idx:dropIdx});
+  }
+
   return {survey_id:sid,token};
 }
 
