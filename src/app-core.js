@@ -259,8 +259,13 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
     if(s){if(!s.schema.questions)s.schema.questions=[];setSurvey(s);surveyRef.current=s;if(s.status==='published')setEditWarning(true);}
   },[surveyId]);
 
- const persist=useCallback((s)=>{
-    LS.update('surveys',s.id,s);
+  const persist=useCallback((s)=>{
+    // Full replacement (not merge) to ensure all nested schema data is saved
+    const allSurveys=LS.all('surveys');
+    const idx=allSurveys.findIndex(r=>r.id===s.id);
+    if(idx>=0)allSurveys[idx]=s;
+    else allSurveys.push(s);
+    LS.set('surveys',allSurveys);
   },[]);
 
   const debounce=(fn,ms=800)=>{
@@ -359,12 +364,18 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
 
   const doPublish=()=>{
     if(!survey)return;
-    persist({...survey,updated_at:now()});
-    const token=survey.token||('s'+uid().slice(0,14));
-    const newV=survey.status==='published'?survey.version+1:survey.version;
-    const updated={...survey,status:'published',version:newV,token,updated_at:now(),_preview:undefined};
-    LS.update('surveys',survey.id,updated);
+    const s=surveyRef.current||survey;
+    const token=s.token||('s'+uid().slice(0,14));
+    const newV=s.status==='published'?s.version+1:s.version;
+    const updated={...s,status:'published',version:newV,token,updated_at:now(),_preview:undefined};
+    // Force full replacement in localStorage
+    const allSurveys=LS.all('surveys');
+    const idx=allSurveys.findIndex(r=>r.id===s.id);
+    if(idx>=0)allSurveys[idx]=updated;
+    else allSurveys.push(updated);
+    LS.set('surveys',allSurveys);
     setSurvey(updated);
+    surveyRef.current=updated;
     const shareUrl=window.location.href.split('?')[0]+'?respond='+token;
     setPublishModal({token,shareUrl,version:newV,surveyId:updated.id});
     toast('Survey published! Redirecting to analytics…','success');
@@ -410,10 +421,15 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
           // Use surveyRef to guarantee latest React state (avoids closure stale-capture)
           const s=surveyRef.current||survey;
           const previewToken=s.token||('prev'+s.id.slice(-8));
-          // Synchronously flush the debounce — write full current state to LS
+          // Synchronously flush any pending debounced save
           clearTimeout(saveRef.current);
-          const savedForPreview={...s,token:previewToken};
-          LS.update('surveys',s.id,savedForPreview);
+          const savedForPreview={...s,token:previewToken,updated_at:now()};
+          // Force full replacement in localStorage (not just a merge)
+          const allSurveys=LS.all('surveys');
+          const idx=allSurveys.findIndex(r=>r.id===s.id);
+          if(idx>=0)allSurveys[idx]=savedForPreview;
+          else allSurveys.push(savedForPreview);
+          LS.set('surveys',allSurveys);
           if(!s.token){setSurvey(savedForPreview);surveyRef.current=savedForPreview;}
           const base=window.location.href.split('?')[0];
           // Add _t= timestamp so every click opens a fresh tab (never reuses a stale cached one)
@@ -989,9 +1005,10 @@ function RespondentView({token}){
         )
       ),
       state==='done'&&React.createElement('div',{className:'text-center px-5 py-10'},
-        React.createElement('div',{style:{fontSize:60,marginBottom:14}},mIcon('celebration',{size:60})),
-        React.createElement('h1',{className:'text-3xl font-bold text-gray-900 mb-2.5 font-display'},settings.thank_you_msg||'Thank you for your feedback!'),
-        settings.thank_you_next&&React.createElement('p',{className:'text-base text-gray-600 mb-7 leading-relaxed'},settings.thank_you_next),
+        React.createElement('div',{style:{width:80,height:80,borderRadius:'50%',background:'#d1fae5',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:20}},mIcon('check_circle',{size:48,style:{color:'#059669'}})),
+        React.createElement('h1',{className:'text-3xl font-bold text-gray-900 mb-3 font-display'},settings.thank_you_msg||'Thank you for your feedback!'),
+        React.createElement('p',{className:'text-base text-gray-500 mb-6 leading-relaxed'},settings.thank_you_next||'Your response has been recorded. You can close this page now.'),
+        React.createElement('div',{style:{width:60,height:4,background:'#00ACBD',borderRadius:2,margin:'0 auto 20px'}}),
         // Positly completion redirect
         isPositly&&campaign&&campaign.completion_link&&React.createElement('div',{style:{marginTop:24,padding:20,background:'var(--gray-50)',borderRadius:10,border:'1px solid var(--gray-200)',maxWidth:420,margin:'24px auto 0'}},
           React.createElement('p',{style:{fontSize:14,color:'var(--gray-600)',marginBottom:10}},'Your response has been recorded.'),
