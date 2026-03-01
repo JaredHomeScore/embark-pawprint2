@@ -268,16 +268,21 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
     LS.set('surveys',allSurveys);
   },[]);
 
-  const debounce=(fn,ms=800)=>{
+  // Debounced save for text input changes (typing), immediate save for structural changes
+  const debouncedPersist=(next)=>{
     clearTimeout(saveRef.current);
-    saveRef.current=setTimeout(fn,ms);
+    saveRef.current=setTimeout(()=>persist(next),600);
+  };
+  const immediatePersist=(next)=>{
+    clearTimeout(saveRef.current);
+    persist(next);
   };
 
   const update=useCallback((changes)=>{
     setSurvey(prev=>{
       const next={...prev,...changes,updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      debouncedPersist(next);
       return next;
     });
   },[persist]);
@@ -286,7 +291,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
     setSurvey(prev=>{
       const next={...prev,schema:{...prev.schema,...sc},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
   },[persist]);
@@ -297,7 +302,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       const qs=[...(prev.schema.questions||[]),q];
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
     setSelQ(q.id);
@@ -308,7 +313,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       const qs=prev.schema.questions.map(q=>q.id===qid?{...q,...changes}:q);
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
   };
@@ -318,7 +323,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       const qs=prev.schema.questions.filter(q=>q.id!==qid);
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
     if(selQ===qid)setSelQ(null);
@@ -332,7 +337,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       [qs[idx],qs[ni]]=[qs[ni],qs[idx]];
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
   };
@@ -345,7 +350,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       qs.splice(toIdx,0,moved);
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
       surveyRef.current=next;
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
   };
@@ -357,7 +362,7 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
       const copy={...prev.schema.questions[idx],id:'q_'+uid()};
       const qs=[...prev.schema.questions.slice(0,idx+1),copy,...prev.schema.questions.slice(idx+1)];
       const next={...prev,schema:{...prev.schema,questions:qs},updated_at:now()};
-      debounce(()=>persist(next));
+      immediatePersist(next);
       return next;
     });
   };
@@ -983,8 +988,8 @@ function RespondentView({token}){
         settings.est_minutes&&React.createElement('p',{className:'text-sm text-gray-400 mb-6'},[mIcon('schedule',{size:16}),' About ',settings.est_minutes,' minutes']),
         React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800 px-5.5 py-2.5 text-base',onClick:startSurvey,style:{background:brand}},'Start Survey →')
       ),
-      state==='taking'&&qIdx<visibleQ.length&&React.createElement('div',null,
-        React.createElement(QCard,{question:visibleQ[qIdx],value:answers[visibleQ[qIdx]?.id],onChange:handleAnswer,brand}),
+      state==='taking'&&qIdx<visibleQ.length&&React.createElement('div',{key:'q_'+qIdx},
+        React.createElement(QCard,{key:visibleQ[qIdx]?.id||qIdx,question:visibleQ[qIdx],value:answers[visibleQ[qIdx]?.id],onChange:handleAnswer,brand}),
         React.createElement('div',{className:'flex justify-between items-center pt-4'},
           settings.allow_back&&qIdx>0?React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400',onClick:goBack},'← Back'):React.createElement('div',null),
           React.createElement('button',{
@@ -1039,6 +1044,38 @@ function RespondentView({token}){
   );
 }
 
+function RatingWidget({q,value,onChange,brand}){
+  const mn=q.min??0,mx=q.max??10;
+  const total=mx-mn+1;
+  const[hov,setHov]=useState(null);
+  return React.createElement('div',{style:{marginTop:16}},
+    React.createElement('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
+      Array.from({length:total},(_,i)=>{
+        const n=mn+i;
+        const sel=value===n;
+        const hovering=hov===n;
+        return React.createElement('button',{
+          key:n,
+          onMouseEnter:()=>setHov(n),
+          onMouseLeave:()=>setHov(null),
+          onClick:()=>onChange(q,n),
+          style:{
+            width:42,height:42,border:'2px solid '+(sel?brand:hovering?brand:'#e5e7eb'),
+            borderRadius:8,background:sel?brand:hovering?brand+'18':'white',
+            color:sel?'white':hovering?brand:'#374151',
+            fontWeight:700,fontSize:14,cursor:'pointer',
+            transition:'all .12s',flexShrink:0
+          }
+        },n);
+      })
+    ),
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,color:'#9ca3af',marginTop:8}},
+      React.createElement('span',null,q.labels?.min||String(mn)),
+      React.createElement('span',null,q.labels?.max||String(mx))
+    )
+  );
+}
+
 function QCard({question:q,value,onChange,brand}){
   const[draggedCard,setDraggedCard]=useState(null);
   const[dropZone,setDropZone]=useState(null);
@@ -1048,7 +1085,7 @@ function QCard({question:q,value,onChange,brand}){
       q.image_url&&React.createElement('img',{src:q.image_url,style:{width:'100%',maxHeight:300,objectFit:'cover',borderRadius:8,marginBottom:16}}),
       React.createElement('h2',{className:'text-2xl font-bold text-gray-900 mb-4 font-display'},q.text),
       React.createElement('p',{style:{whiteSpace:'pre-wrap',fontSize:16,color:'var(--gray-600)',lineHeight:1.6,marginBottom:20}},q.body),
-      React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:brand}},q.button_text||'Continue')
+      React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:brand},onClick:()=>onChange(q,'_context_seen')},q.button_text||'Continue')
     );
   }
   const options=q.randomize_options?[...q.options].sort(()=>Math.random()-.5):(q.options||[]);
@@ -1080,38 +1117,7 @@ function QCard({question:q,value,onChange,brand}){
     ),
     ['short_text','paragraph'].includes(q.type)&&React.createElement('input',{type:'text',className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal bg-white',style:{marginTop:12},value:value||'',placeholder:q.placeholder||'',onChange:e=>onChange(q,e.target.value)}),
     q.type==='rank'&&React.createElement(RankWidget,{q,value,onChange,brand}),
-    q.type==='rating'&&(()=>{
-      const mn=q.min??0,mx=q.max??10;
-      const total=mx-mn+1;
-      const[hov,setHov]=useState(null);
-      const effVal=hov!=null?hov:value;
-      return React.createElement('div',{style:{marginTop:16}},
-        React.createElement('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
-          Array.from({length:total},(_,i)=>{
-            const n=mn+i;
-            const sel=value===n;
-            const hovering=hov===n;
-            return React.createElement('button',{
-              key:n,
-              onMouseEnter:()=>setHov(n),
-              onMouseLeave:()=>setHov(null),
-              onClick:()=>onChange(q,n),
-              style:{
-                width:42,height:42,border:'2px solid '+(sel?brand:hovering?brand:'#e5e7eb'),
-                borderRadius:8,background:sel?brand:hovering?brand+'18':'white',
-                color:sel?'white':hovering?brand:'#374151',
-                fontWeight:700,fontSize:14,cursor:'pointer',
-                transition:'all .12s',flexShrink:0
-              }
-            },n);
-          })
-        ),
-        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,color:'#9ca3af',marginTop:8}},
-          React.createElement('span',null,q.labels?.min||String(mn)),
-          React.createElement('span',null,q.labels?.max||String(mx))
-        )
-      );
-    })(),
+    q.type==='rating'&&React.createElement(RatingWidget,{q,value,onChange,brand}),
     ['card_sort_open','card_sort_closed'].includes(q.type)&&React.createElement(CardSortWidget,{q,value,onChange,brand})
   );
 }
