@@ -1357,13 +1357,11 @@ function PrototypeTestWidget({q,value,onChange,brand}){
   const timeLimit=q.time_limit_seconds||0;
 
   // Build embed URL from Figma share URL
+  // Figma's official embed format: https://www.figma.com/embed?embed_host=share&url=<encoded_url>
+  // This works for ALL Figma URL types: /proto/, /design/, /file/, /board/
   const figmaEmbedUrl=useMemo(()=>{
-    const url=q.figma_share_url||'';
+    const url=(q.figma_share_url||'').trim();
     if(!url.includes('figma.com'))return null;
-    // Convert share/proto/design URLs to embed format
-    const cleaned=url.replace(/\/(proto|design|file)\//,'/embed/');
-    if(cleaned.includes('/embed/'))return cleaned+(cleaned.includes('?')?'&':'?')+'embed_host=share&footer=false&bottombar=false';
-    // Fallback: wrap in iframe embed URL
     return 'https://www.figma.com/embed?embed_host=share&url='+encodeURIComponent(url);
   },[q.figma_share_url]);
 
@@ -1469,8 +1467,9 @@ function PrototypeTestWidget({q,value,onChange,brand}){
       React.createElement('iframe',{
         src:figmaEmbedUrl,
         onLoad:()=>setIframeLoaded(true),
-        style:{width:'100%',height:isFullscreen?'calc(100vh - 44px)':500,border:'none',display:'block'},
+        style:{width:'100%',height:isFullscreen?'calc(100vh - 44px)':560,border:'none',display:'block'},
         allowFullScreen:true,
+        allow:'fullscreen',
         loading:'lazy'
       }),
       // Progress bar for min time
