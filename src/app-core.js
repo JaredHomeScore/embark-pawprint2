@@ -930,8 +930,8 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
 // ── QUESTION SETTINGS PANEL ──────────────────────────────────────────────────
 function QSettingsPanel({q,allQ,onUpdate}){
   const[showLogic,setShowLogic]=useState(false);
-  return React.createElement('div',{className:'px-3.5 py-3.5'},
-    React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5 font-display'},'Question Settings'),
+  return React.createElement('div',{className:'px-5 py-5'},
+    React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-4 font-display'},'Question Settings'),
     React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Required',checked:q.required,onChange:v=>onUpdate({required:v})})),
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Randomize options',checked:!!q.randomize_options,onChange:v=>onUpdate({randomize_options:v})})),
@@ -1043,36 +1043,36 @@ function QSettingsPanel({q,allQ,onUpdate}){
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Open-ended feedback text box',checked:q.open_ended_feedback_enabled!==false,onChange:v=>onUpdate({open_ended_feedback_enabled:v})}))
     ),
     // AI Interview settings
-    q.type==='ai_interview'&&React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
-      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5'},'AI Interview Configuration'),
-      !OPENAI_KEY&&React.createElement('div',{style:{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12,color:'#92400e'}},
-        mIcon('warning',{size:14,style:{verticalAlign:'middle',marginRight:4}}),'No OpenAI API key configured. Set VITE_OPENAI_API_KEY in your .env file to enable AI interviews.'
+    q.type==='ai_interview'&&React.createElement('div',{className:'mb-5 pb-5 border-b border-gray-100 last:border-b-0'},
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-4'},'AI Interview Configuration'),
+      !OPENAI_KEY&&React.createElement('div',{style:{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:8,padding:'12px 16px',marginBottom:18,fontSize:12,color:'#92400e'}},
+        mIcon('warning',{size:14,style:{verticalAlign:'middle',marginRight:6}}),'No OpenAI API key configured. Set VITE_OPENAI_API_KEY in your .env file to enable AI interviews.'
       ),
-      React.createElement('div',{className:'mb-4'},
-        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Interview Objective'),
-        React.createElement('textarea',{className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y',value:q.ai_objective||'',rows:2,placeholder:'e.g. "Understand how pet owners discover and evaluate DNA testing services for their dogs"',onChange:e=>onUpdate({ai_objective:e.target.value})}),
-        React.createElement('p',{className:'mt-1 text-xs text-gray-400'},'The AI interviewer will use this objective to guide the conversation and generate relevant follow-up questions.')
+      React.createElement('div',{className:'mb-5'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-2'},'Interview Objective'),
+        React.createElement('textarea',{className:'w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y',value:q.ai_objective||'',rows:3,placeholder:'e.g. "Understand how pet owners discover and evaluate DNA testing services for their dogs"',onChange:e=>onUpdate({ai_objective:e.target.value})}),
+        React.createElement('p',{className:'mt-1.5 text-xs text-gray-400'},'The AI interviewer will use this objective to guide the conversation and generate relevant follow-up questions.')
       ),
-      React.createElement('div',{className:'mb-4'},
-        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Interview Duration'),
-        React.createElement('div',{style:{display:'flex',gap:8}},
+      React.createElement('div',{className:'mb-5'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-2'},'Interview Duration'),
+        React.createElement('div',{style:{display:'flex',gap:10}},
           ['1-3','3-5','7-9'].map(d=>React.createElement('button',{key:d,onClick:()=>onUpdate({ai_duration:d}),
             style:{flex:1,padding:'10px 12px',borderRadius:8,border:'2px solid '+(q.ai_duration===d?'#9333ea':'#e5e7eb'),background:q.ai_duration===d?'#faf5ff':'white',color:q.ai_duration===d?'#9333ea':'#374151',fontWeight:600,fontSize:14,cursor:'pointer',transition:'all .15s',textAlign:'center'}
           },d+' min'))
         ),
-        React.createElement('p',{className:'mt-1.5 text-xs text-gray-400'},'The AI will manage its pace to cover all starter questions within this time window.')
+        React.createElement('p',{className:'mt-2 text-xs text-gray-400'},'The AI will manage its pace to cover all starter questions within this time window.')
       ),
-      React.createElement('div',{className:'mb-4'},
-        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Starter Questions (1-3)'),
-        React.createElement('p',{className:'text-xs text-gray-400 mb-2'},'The AI will ask these in order, then probe deeper based on responses.'),
-        (q.ai_starter_questions||['']).map((sq,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8}},
-          React.createElement('span',{style:{fontSize:12,fontWeight:600,color:'#9333ea',minWidth:22,paddingTop:8}},`Q${i+1}`),
-          React.createElement('textarea',{className:'flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y bg-white',value:sq,rows:1,placeholder:`e.g. "${i===0?'Tell me about your experience with Embark\'s products.':i===1?'What frustrations have you encountered?':'If you could change one thing, what would it be?'}"`,onChange:e=>{const qs=[...(q.ai_starter_questions||[''])];qs[i]=e.target.value;onUpdate({ai_starter_questions:qs});}}),
-          (q.ai_starter_questions||['']).length>1&&React.createElement('button',{className:'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-none text-sm font-medium transition-all cursor-pointer bg-transparent text-gray-600 hover:bg-gray-100',onClick:()=>{const qs=[...(q.ai_starter_questions||[''])].filter((_,j)=>j!==i);onUpdate({ai_starter_questions:qs});}},mIcon('close',{size:16}))
+      React.createElement('div',{className:'mb-5'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-2'},'Starter Questions (1-3)'),
+        React.createElement('p',{className:'text-xs text-gray-400 mb-3'},'The AI will ask these in order, then probe deeper based on responses.'),
+        (q.ai_starter_questions||['']).map((sq,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}},
+          React.createElement('span',{style:{fontSize:12,fontWeight:600,color:'#9333ea',minWidth:24,paddingTop:10}},`Q${i+1}`),
+          React.createElement('textarea',{className:'flex-1 px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y bg-white',value:sq,rows:2,placeholder:`e.g. "${i===0?'Tell me about your experience with Embark\'s products.':i===1?'What frustrations have you encountered?':'If you could change one thing, what would it be?'}"`,onChange:e=>{const qs=[...(q.ai_starter_questions||[''])];qs[i]=e.target.value;onUpdate({ai_starter_questions:qs});}}),
+          (q.ai_starter_questions||['']).length>1&&React.createElement('button',{className:'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-none text-sm font-medium transition-all cursor-pointer bg-transparent text-gray-600 hover:bg-gray-100',style:{marginTop:6},onClick:()=>{const qs=[...(q.ai_starter_questions||[''])].filter((_,j)=>j!==i);onUpdate({ai_starter_questions:qs});}},mIcon('close',{size:16}))
         )),
-        (q.ai_starter_questions||['']).length<3&&React.createElement('button',{className:'flex items-center gap-1 text-sm text-embark-teal bg-transparent border-none px-0.5 py-0.5 cursor-pointer hover:underline',onClick:()=>onUpdate({ai_starter_questions:[...(q.ai_starter_questions||['']),'']})},mIcon('add',{size:16}),' Add question')
+        (q.ai_starter_questions||['']).length<3&&React.createElement('button',{className:'flex items-center gap-1 text-sm text-embark-teal bg-transparent border-none px-1 py-1 cursor-pointer hover:underline',style:{marginTop:4},onClick:()=>onUpdate({ai_starter_questions:[...(q.ai_starter_questions||['']),'']})},mIcon('add',{size:16}),' Add question')
       ),
-      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5 mt-5'},'Output Settings'),
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-3 mt-6'},'Output Settings'),
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'AI speaks questions aloud (Text-to-Speech)',checked:q.ai_tts_enabled!==false,onChange:v=>onUpdate({ai_tts_enabled:v})}))
     ),
     React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
