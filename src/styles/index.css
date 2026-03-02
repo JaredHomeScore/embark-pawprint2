@@ -83,3 +83,6 @@ tr:last-child td { border-bottom: none; }
 .card-item.dragging { opacity: .5; }
 .card-sort-category { background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 12px; min-height: 80px; transition: all .2s; }
 .card-sort-category.drag-over { background: #e0f7fa; border-color: #00ACBD; }
+
+/* AI Interview recording pulse */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

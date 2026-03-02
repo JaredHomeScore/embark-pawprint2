@@ -173,6 +173,7 @@ const QTYPES=[
   {type:'card_sort_closed',label:'Card Sort (Closed)',icon:'view_column'},
   {type:'context_screen',label:'Context Screen',icon:'article'},
   {type:'prototype_test',label:'Prototype Test (Figma)',icon:'devices'},
+  {type:'ai_interview',label:'AI-Moderated Interview',icon:'mic'},
 ];
 
 const mkQuestion=type=>({
@@ -205,6 +206,11 @@ const mkQuestion=type=>({
   success_question_enabled:type==='prototype_test'?true:undefined,
   difficulty_scale_enabled:type==='prototype_test'?true:undefined,
   open_ended_feedback_enabled:type==='prototype_test'?true:undefined,
+  // AI Interview fields
+  ai_objective:type==='ai_interview'?'':undefined,
+  ai_duration:type==='ai_interview'?'3-5':undefined, // '1-3', '3-5', '7-9'
+  ai_starter_questions:type==='ai_interview'?['']:undefined, // 1-3 predefined starter questions
+  ai_tts_enabled:type==='ai_interview'?true:undefined,
   logic:[],
 });
 
@@ -244,7 +250,14 @@ function seedDemo(){
       min_view_time_seconds:10,time_limit_seconds:180,
       success_question_enabled:true,difficulty_scale_enabled:true,open_ended_feedback_enabled:true,
       logic:[]},
-    // 11. Final context screen
+    // 11. AI Interview
+    {id:'qai',type:'ai_interview',text:'Tell us about your experience with pet health testing',required:true,
+      ai_objective:'Understand how pet owners discover, evaluate, and use DNA and health testing services for their dogs, including pain points and unmet needs.',
+      ai_duration:'3-5',
+      ai_starter_questions:['Tell me about your experience with Embark\'s DNA and health testing.','What frustrated you most about the process or the results?','If you could change one thing about how pet health testing works, what would it be?'],
+      ai_tts_enabled:true,
+      logic:[]},
+    // 12. Final context screen
     {id:'qcse',type:'context_screen',text:'Almost done!',body:'One last question — we appreciate your time and thoughtfulness.',button_text:'Continue',required:false,logic:[],image_url:''},
     // 12. Rating (satisfaction 1-5)
     {id:'q9',type:'rating',text:'Overall, how would you rate your experience with this survey?',required:false,min:1,max:5,labels:{min:'Poor',max:'Excellent'},logic:[]},
@@ -375,6 +388,49 @@ function seedDemo(){
       viewport_size:Math.random()>0.3?'1440x900':'375x812'
     };
     LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'qpt',question_type:'prototype_test',raw_value:ptVal,text_value:JSON.stringify(ptVal),numeric_value:null,answered_at:at});
+
+    // QAI: AI Interview
+    const aiUserResponses=[
+      'I really enjoyed the process. The DNA results were fascinating — we found out our rescue has some unexpected breeds in the mix.',
+      'The health screening was the main reason I bought the kit. I wanted to know about potential genetic risks.',
+      'I found the waiting time a bit long. It took about 3 weeks to get results, and I was checking every day.',
+      'The results interface is great on desktop but a bit hard to navigate on my phone.',
+      'I learned about Embark through a friend who had tested their dog. Word of mouth was really effective.',
+      'The pricing felt steep at first, but the depth of information justified it completely.',
+      'I wish there were more actionable recommendations based on the health results. Like specific diet or exercise plans.',
+      'Customer support was excellent when I had questions about interpreting the genetic diversity results.',
+      'The relative finder feature was a fun surprise — we connected with another family that has our dog\'s sibling!',
+      'I was frustrated that some health markers showed as "at risk" without clear guidance on what to do next.',
+      'The breed breakdown was incredibly accurate. We suspected Lab and German Shepherd, and those were the top two.',
+      'I think the biggest improvement would be integration with my vet\'s system so they can see the results directly.',
+    ];
+    const aiFollowUps=[
+      'That\'s really interesting! Can you tell me more about what surprised you in the breed results?',
+      'I understand the concern about waiting. How did you feel when you finally received the results?',
+      'That\'s a great point about mobile navigation. What specifically was difficult on your phone?',
+      'Can you tell me more about what kind of actionable recommendations you were hoping for?',
+      'How has knowing about the genetic risks changed how you care for your dog?',
+    ];
+    const aiDurationMs=Math.floor((120+Math.random()*180)*1000);
+    const numExchanges=4+Math.floor(Math.random()*4);
+    const aiTranscript=[];
+    for(let e=0;e<numExchanges;e++){
+      if(e<3){
+        aiTranscript.push({role:'ai',text:['Tell me about your experience with Embark\'s DNA and health testing.','What frustrated you most about the process or the results?','If you could change one thing about how pet health testing works, what would it be?'][e]||aiFollowUps[e%aiFollowUps.length],ts:new Date(Date.now()-aiDurationMs+e*30000).toISOString()});
+      }else{
+        aiTranscript.push({role:'ai',text:aiFollowUps[Math.floor(Math.random()*aiFollowUps.length)],ts:new Date(Date.now()-aiDurationMs+e*30000).toISOString()});
+      }
+      aiTranscript.push({role:'user',text:aiUserResponses[Math.floor(Math.random()*aiUserResponses.length)],ts:new Date(Date.now()-aiDurationMs+e*30000+15000).toISOString()});
+    }
+    const aiVal={
+      started_at:new Date(Date.now()-aiDurationMs).toISOString(),
+      completed_at:new Date().toISOString(),
+      duration_ms:aiDurationMs,
+      total_exchanges:aiTranscript.length,
+      transcript:aiTranscript,
+      device_type:Math.random()>0.3?'desktop':'mobile'
+    };
+    LS.insert('answers',{id:uid(),session_id:sessId,survey_id:sid,question_id:'qai',question_type:'ai_interview',raw_value:aiVal,text_value:JSON.stringify(aiVal),numeric_value:null,answered_at:at});
 
     // Q9: Rating (survey experience 1-5)
     const sexp=Math.floor(3+Math.random()*3);
@@ -777,6 +833,24 @@ function SurveyBuilder({surveyId,onBack,onPublished}){
                 )
               )
             ),
+            // AI Interview preview
+            q.type==='ai_interview'&&React.createElement('div',{style:{paddingLeft:26,marginTop:12}},
+              React.createElement('div',{style:{background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:8,padding:12}},
+                React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+                  mIcon('mic',{size:18,style:{color:'#9333ea'}}),
+                  React.createElement('span',{className:'text-xs font-semibold',style:{color:'#7c3aed'}},'AI-Moderated Voice Interview')
+                ),
+                q.ai_objective?React.createElement('div',{style:{fontSize:12,color:'#374151',background:'white',border:'1px solid #e5e7eb',borderRadius:6,padding:'6px 10px',marginBottom:8}},
+                  React.createElement('strong',null,'Objective: '),q.ai_objective.slice(0,100)+(q.ai_objective.length>100?'...':'')
+                ):React.createElement('div',{style:{fontSize:12,color:'#9ca3af',fontStyle:'italic',marginBottom:8}},'No objective set — configure in settings panel →'),
+                React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap'}},
+                  React.createElement('span',{style:{fontSize:10,color:'#7c3aed',background:'#f3e8ff',padding:'2px 8px',borderRadius:10}},`${q.ai_duration||'3-5'} min`),
+                  React.createElement('span',{style:{fontSize:10,color:'#0369a1',background:'#e0f2fe',padding:'2px 8px',borderRadius:10}},`${(q.ai_starter_questions||[]).filter(s=>s.trim()).length} starter Q's`),
+                  q.ai_tts_enabled!==false&&React.createElement('span',{style:{fontSize:10,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:10}},'TTS enabled'),
+                  !OPENAI_KEY&&React.createElement('span',{style:{fontSize:10,color:'#dc2626',background:'#fef2f2',padding:'2px 8px',borderRadius:10}},'No API key')
+                )
+              )
+            ),
             // Rating preview
             q.type==='rating'&&React.createElement('div',{style:{paddingLeft:26}},
               (()=>{const mn=q.min??0,mx=q.max??10,total=mx-mn+1;
@@ -968,6 +1042,39 @@ function QSettingsPanel({q,allQ,onUpdate}){
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'How difficult was it? (1-5 scale)',checked:q.difficulty_scale_enabled!==false,onChange:v=>onUpdate({difficulty_scale_enabled:v})})),
       React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'Open-ended feedback text box',checked:q.open_ended_feedback_enabled!==false,onChange:v=>onUpdate({open_ended_feedback_enabled:v})}))
     ),
+    // AI Interview settings
+    q.type==='ai_interview'&&React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5'},'AI Interview Configuration'),
+      !OPENAI_KEY&&React.createElement('div',{style:{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12,color:'#92400e'}},
+        mIcon('warning',{size:14,style:{verticalAlign:'middle',marginRight:4}}),'No OpenAI API key configured. Set VITE_OPENAI_API_KEY in your .env file to enable AI interviews.'
+      ),
+      React.createElement('div',{className:'mb-4'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Interview Objective'),
+        React.createElement('textarea',{className:'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y',value:q.ai_objective||'',rows:2,placeholder:'e.g. "Understand how pet owners discover and evaluate DNA testing services for their dogs"',onChange:e=>onUpdate({ai_objective:e.target.value})}),
+        React.createElement('p',{className:'mt-1 text-xs text-gray-400'},'The AI interviewer will use this objective to guide the conversation and generate relevant follow-up questions.')
+      ),
+      React.createElement('div',{className:'mb-4'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Interview Duration'),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          ['1-3','3-5','7-9'].map(d=>React.createElement('button',{key:d,onClick:()=>onUpdate({ai_duration:d}),
+            style:{flex:1,padding:'10px 12px',borderRadius:8,border:'2px solid '+(q.ai_duration===d?'#9333ea':'#e5e7eb'),background:q.ai_duration===d?'#faf5ff':'white',color:q.ai_duration===d?'#9333ea':'#374151',fontWeight:600,fontSize:14,cursor:'pointer',transition:'all .15s',textAlign:'center'}
+          },d+' min'))
+        ),
+        React.createElement('p',{className:'mt-1.5 text-xs text-gray-400'},'The AI will manage its pace to cover all starter questions within this time window.')
+      ),
+      React.createElement('div',{className:'mb-4'},
+        React.createElement('label',{className:'block text-sm font-medium text-gray-700 mb-1.5'},'Starter Questions (1-3)'),
+        React.createElement('p',{className:'text-xs text-gray-400 mb-2'},'The AI will ask these in order, then probe deeper based on responses.'),
+        (q.ai_starter_questions||['']).map((sq,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8}},
+          React.createElement('span',{style:{fontSize:12,fontWeight:600,color:'#9333ea',minWidth:22,paddingTop:8}},`Q${i+1}`),
+          React.createElement('textarea',{className:'flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-embark-teal/30 focus:border-embark-teal resize-y bg-white',value:sq,rows:1,placeholder:`e.g. "${i===0?'Tell me about your experience with Embark\'s products.':i===1?'What frustrations have you encountered?':'If you could change one thing, what would it be?'}"`,onChange:e=>{const qs=[...(q.ai_starter_questions||[''])];qs[i]=e.target.value;onUpdate({ai_starter_questions:qs});}}),
+          (q.ai_starter_questions||['']).length>1&&React.createElement('button',{className:'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-none text-sm font-medium transition-all cursor-pointer bg-transparent text-gray-600 hover:bg-gray-100',onClick:()=>{const qs=[...(q.ai_starter_questions||[''])].filter((_,j)=>j!==i);onUpdate({ai_starter_questions:qs});}},mIcon('close',{size:16}))
+        )),
+        (q.ai_starter_questions||['']).length<3&&React.createElement('button',{className:'flex items-center gap-1 text-sm text-embark-teal bg-transparent border-none px-0.5 py-0.5 cursor-pointer hover:underline',onClick:()=>onUpdate({ai_starter_questions:[...(q.ai_starter_questions||['']),'']})},mIcon('add',{size:16}),' Add question')
+      ),
+      React.createElement('div',{className:'text-sm font-semibold text-gray-700 mb-2.5 mt-5'},'Output Settings'),
+      React.createElement('div',{className:'mb-3'},React.createElement(Toggle,{label:'AI speaks questions aloud (Text-to-Speech)',checked:q.ai_tts_enabled!==false,onChange:v=>onUpdate({ai_tts_enabled:v})}))
+    ),
     React.createElement('div',{className:'mb-4 pb-4 border-b border-gray-100 last:border-b-0'},
       React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 px-2.5 py-1.5 text-xs',onClick:()=>setShowLogic(!showLogic)},showLogic?'▲ Hide Logic':'⚡ Display Logic'),
       showLogic&&React.createElement(LogicEditor,{q,allQ,onUpdate})
@@ -1065,6 +1172,7 @@ function RespondentView({token}){
   const[qIdx,setQIdx]=useState(-1);
   const[startTime,setStartTime]=useState(null);
   const[email,setEmail]=useState('');
+  const[micConsent,setMicConsent]=useState(false);
   const toast=useToast();
 
   // Positly params from URL (Positly auto-appends assignmentID & participantID)
@@ -1153,7 +1261,7 @@ function RespondentView({token}){
     if(isPreviewMode)return; // preview: update UI state but don't write to LS
     if(sessionId){
       const isText=['short_text','paragraph'].includes(q.type);
-      const isNum=q.type==='rating'||['card_sort_open','card_sort_closed','rank','prototype_test'].includes(q.type);
+      const isNum=q.type==='rating'||['card_sort_open','card_sort_closed','rank','prototype_test','ai_interview'].includes(q.type);
       const existing=LS.where('answers',a=>a.session_id===sessionId&&a.question_id===q.id)[0];
       const aData={session_id:sessionId,survey_id:survey.id,question_id:q.id,question_type:q.type,raw_value:value,text_value:isText?value:Array.isArray(value)?value.join(', '):JSON.stringify(value),numeric_value:isNum?null:null,answered_at:now()};
       if(existing)LS.update('answers',existing.id,aData);
@@ -1201,13 +1309,32 @@ function RespondentView({token}){
       )
     ),
     React.createElement('div',{className:'flex-1 px-5 py-7 max-w-2xl mx-auto w-full'},
-      state==='welcome'&&React.createElement('div',{className:'text-center px-5 py-10'},
-        React.createElement('div',{style:{fontSize:52,marginBottom:14}},mIcon('waving_hand',{size:52})),
-        React.createElement('h1',{className:'text-3xl font-bold text-gray-900 mb-2.5 font-display'},survey.title),
-        survey.description&&React.createElement('p',{className:'text-base text-gray-600 mb-7 leading-relaxed'},survey.description),
-        settings.est_minutes&&React.createElement('p',{className:'text-sm text-gray-400 mb-6'},[mIcon('schedule',{size:16}),' About ',settings.est_minutes,' minutes']),
-        React.createElement('button',{className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800 px-5.5 py-2.5 text-base',onClick:startSurvey,style:{background:brand}},'Start Survey →')
-      ),
+      state==='welcome'&&(()=>{
+        const hasAiQ=(survey.schema?.questions||[]).some(q=>q.type==='ai_interview');
+        return React.createElement('div',{className:'text-center px-5 py-10'},
+          React.createElement('div',{style:{fontSize:52,marginBottom:14}},mIcon('waving_hand',{size:52})),
+          React.createElement('h1',{className:'text-3xl font-bold text-gray-900 mb-2.5 font-display'},survey.title),
+          survey.description&&React.createElement('p',{className:'text-base text-gray-600 mb-7 leading-relaxed'},survey.description),
+          settings.est_minutes&&React.createElement('p',{className:'text-sm text-gray-400 mb-6'},[mIcon('schedule',{size:16}),' About ',settings.est_minutes,' minutes']),
+          hasAiQ&&React.createElement('div',{style:{maxWidth:420,margin:'0 auto 20px',padding:'14px 18px',background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:10,textAlign:'left'}},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+              mIcon('mic',{size:20,style:{color:'#9333ea'}}),
+              React.createElement('span',{style:{fontWeight:600,fontSize:14,color:'#581c87'}},'Microphone Required')
+            ),
+            React.createElement('p',{style:{fontSize:13,color:'#374151',lineHeight:1.5,marginBottom:12}},'This survey includes an AI-moderated interview that requires microphone access. Your voice will be transcribed to text — no audio recordings are stored.'),
+            React.createElement('label',{style:{display:'flex',alignItems:'flex-start',gap:8,cursor:'pointer',fontSize:13,color:'#374151'}},
+              React.createElement('input',{type:'checkbox',checked:micConsent,onChange:e=>setMicConsent(e.target.checked),style:{marginTop:2,accentColor:'#9333ea'}}),
+              React.createElement('span',null,'I consent to using my microphone for the AI-moderated interview portion of this survey.')
+            )
+          ),
+          React.createElement('button',{
+            className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800 px-5.5 py-2.5 text-base',
+            onClick:startSurvey,
+            style:{background:hasAiQ&&!micConsent?'#9ca3af':brand,cursor:hasAiQ&&!micConsent?'not-allowed':'pointer'},
+            disabled:hasAiQ&&!micConsent
+          },'Start Survey →')
+        );
+      })(),
       state==='taking'&&qIdx<visibleQ.length&&React.createElement('div',{key:'q_'+qIdx},
         React.createElement(QCard,{key:visibleQ[qIdx]?.id||qIdx,question:visibleQ[qIdx],value:answers[visibleQ[qIdx]?.id],onChange:handleAnswer,brand}),
         React.createElement('div',{className:'flex justify-between items-center pt-4'},
@@ -1220,11 +1347,15 @@ function RespondentView({token}){
             const isPT=cq?.type==='prototype_test';
             const ptVal=isPT?answers[cq?.id]:null;
             const ptIncomplete=isPT&&(!ptVal||!ptVal.task_completed_at);
-            const reqIncomplete=cq?.type!=='context_screen'&&cq?.type!=='prototype_test'&&cq?.required&&(answers[cq?.id]===undefined||answers[cq?.id]==='');
-            const isDisabled=csIncomplete||ptIncomplete||reqIncomplete;
+            const isAI=cq?.type==='ai_interview';
+            const aiVal=isAI?answers[cq?.id]:null;
+            const aiIncomplete=isAI&&(!aiVal||!aiVal.completed_at);
+            const reqIncomplete=cq?.type!=='context_screen'&&cq?.type!=='prototype_test'&&cq?.type!=='ai_interview'&&cq?.required&&(answers[cq?.id]===undefined||answers[cq?.id]==='');
+            const isDisabled=csIncomplete||ptIncomplete||aiIncomplete||reqIncomplete;
             return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}},
               isCS&&csIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please sort all cards into categories before continuing'),
               isPT&&ptIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please complete the prototype test before continuing'),
+              isAI&&aiIncomplete&&React.createElement('div',{style:{fontSize:12,color:'#ef4444',fontWeight:500}},'Please complete the AI interview before continuing'),
               React.createElement('button',{
                 className:'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-sm font-medium transition-all whitespace-nowrap cursor-pointer bg-black text-white hover:bg-gray-800',style:{background:isDisabled?'#9ca3af':brand,cursor:isDisabled?'not-allowed':'pointer'},onClick:isDisabled?undefined:goNext,
                 disabled:isDisabled
@@ -1365,7 +1496,8 @@ function QCard({question:q,value,onChange,brand}){
     q.type==='rank'&&React.createElement(RankWidget,{q,value,onChange,brand}),
     q.type==='rating'&&React.createElement(RatingWidget,{q,value,onChange,brand}),
     ['card_sort_open','card_sort_closed'].includes(q.type)&&React.createElement(CardSortWidget,{q,value,onChange,brand}),
-    q.type==='prototype_test'&&React.createElement(PrototypeTestWidget,{q,value,onChange,brand})
+    q.type==='prototype_test'&&React.createElement(PrototypeTestWidget,{q,value,onChange,brand}),
+    q.type==='ai_interview'&&React.createElement(AIInterviewWidget,{q,value,onChange,brand})
   );
 }
 
@@ -1562,6 +1694,373 @@ function PrototypeTestWidget({q,value,onChange,brand}){
         rows:3,value:val.open_text_feedback||'',placeholder:'Share your thoughts...',
         onChange:e=>update({open_text_feedback:e.target.value})
       })
+    )
+  );
+}
+
+// ── OPENAI HELPERS ─────────────────────────────────────────────────────────
+const OPENAI_KEY=(typeof import.meta!=='undefined'&&import.meta.env?.VITE_OPENAI_API_KEY)||'';
+async function openaiChat(messages,{maxTokens=500,temperature=0.7}={}){
+  if(!OPENAI_KEY)throw new Error('No OpenAI API key configured');
+  const res=await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+OPENAI_KEY},
+    body:JSON.stringify({model:'gpt-4o-mini',messages,max_tokens:maxTokens,temperature})
+  });
+  if(!res.ok)throw new Error('OpenAI API error: '+res.status);
+  const data=await res.json();
+  return data.choices?.[0]?.message?.content||'';
+}
+async function openaiWhisper(audioBlob){
+  if(!OPENAI_KEY)throw new Error('No OpenAI API key configured');
+  const form=new FormData();
+  form.append('file',audioBlob,'audio.webm');
+  form.append('model','whisper-1');
+  form.append('response_format','text');
+  const res=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+    method:'POST',headers:{'Authorization':'Bearer '+OPENAI_KEY},body:form
+  });
+  if(!res.ok)throw new Error('Whisper API error: '+res.status);
+  return (await res.text()).trim();
+}
+
+// ── AI INTERVIEW WIDGET (Respondent) ──────────────────────────────────────
+function AIInterviewWidget({q,value,onChange,brand}){
+  const val=value&&typeof value==='object'?value:{};
+  // Phases: consent → idle → interviewing → done
+  const[phase,setPhase]=useState(val.completed_at?'done':'idle');
+  const[transcript,setTranscript]=useState(val.transcript||[]); // [{role:'ai'|'user',text,ts}]
+  const[isRecording,setIsRecording]=useState(false);
+  const[isProcessing,setIsProcessing]=useState(false);
+  const[isSpeaking,setIsSpeaking]=useState(false);
+  const[elapsed,setElapsed]=useState(0);
+  const[currentQIdx,setCurrentQIdx]=useState(0); // index into starter questions
+  const[error,setError]=useState(null);
+
+  const mediaRecRef=useRef(null);
+  const chunksRef=useRef([]);
+  const timerRef=useRef(null);
+  const startRef=useRef(null);
+  const synthRef=useRef(null);
+  const starterQs=(q.ai_starter_questions||[]).filter(s=>s.trim());
+  const objective=q.ai_objective||'';
+  const ttsEnabled=q.ai_tts_enabled!==false;
+
+  // Duration mapping in seconds
+  const durationMap={'1-3':{min:60,max:180},'3-5':{min:180,max:300},'7-9':{min:420,max:540}};
+  const dur=durationMap[q.ai_duration]||durationMap['3-5'];
+  const maxSec=dur.max;
+
+  const update=(patch)=>{const next={...val,...patch};onChange(q,next);};
+
+  // Timer
+  useEffect(()=>{
+    if(phase==='interviewing'){
+      startRef.current=Date.now();
+      timerRef.current=setInterval(()=>{
+        const el=Math.floor((Date.now()-startRef.current)/1000);
+        setElapsed(el);
+        if(el>=maxSec){clearInterval(timerRef.current);wrapUp();}
+      },1000);
+    }
+    return()=>clearInterval(timerRef.current);
+  },[phase]);
+
+  const formatTime=(s)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+
+  // TTS: speak text using browser SpeechSynthesis
+  const speak=(text)=>{
+    if(!ttsEnabled||!window.speechSynthesis)return Promise.resolve();
+    return new Promise(resolve=>{
+      window.speechSynthesis.cancel();
+      const utter=new SpeechSynthesisUtterance(text);
+      utter.rate=1.0;utter.pitch=1.0;
+      // Try to pick a natural-sounding voice
+      const voices=window.speechSynthesis.getVoices();
+      const preferred=voices.find(v=>v.name.includes('Samantha'))||voices.find(v=>v.lang.startsWith('en')&&!v.localService)||voices[0];
+      if(preferred)utter.voice=preferred;
+      utter.onend=()=>{setIsSpeaking(false);resolve();};
+      utter.onerror=()=>{setIsSpeaking(false);resolve();};
+      setIsSpeaking(true);
+      synthRef.current=utter;
+      window.speechSynthesis.speak(utter);
+    });
+  };
+
+  // Ask the first starter question and begin interview
+  const startInterview=async()=>{
+    setPhase('interviewing');
+    update({started_at:new Date().toISOString(),device_type:/Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop'});
+    // Ask first question
+    if(starterQs.length>0){
+      const firstQ=starterQs[0];
+      const entry={role:'ai',text:firstQ,ts:new Date().toISOString()};
+      setTranscript([entry]);
+      update({transcript:[entry]});
+      setCurrentQIdx(1);
+      await speak(firstQ);
+    }
+  };
+
+  // Record audio from mic
+  const startRecording=async()=>{
+    try{
+      setError(null);
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const mr=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
+      chunksRef.current=[];
+      mr.ondataavailable=e=>{if(e.data.size>0)chunksRef.current.push(e.data);};
+      mr.start(250);
+      mediaRecRef.current=mr;
+      setIsRecording(true);
+    }catch(err){
+      setError('Microphone access denied. Please allow microphone access and try again.');
+    }
+  };
+
+  const stopRecording=()=>{
+    return new Promise(resolve=>{
+      const mr=mediaRecRef.current;
+      if(!mr||mr.state==='inactive'){resolve(null);return;}
+      mr.onstop=()=>{
+        const blob=new Blob(chunksRef.current,{type:mr.mimeType||'audio/webm'});
+        // Stop all tracks
+        mr.stream.getTracks().forEach(t=>t.stop());
+        mediaRecRef.current=null;
+        setIsRecording(false);
+        resolve(blob);
+      };
+      mr.stop();
+    });
+  };
+
+  // Process user's spoken answer: transcribe → generate follow-up
+  const handleUserResponse=async()=>{
+    setIsProcessing(true);
+    try{
+      const blob=await stopRecording();
+      if(!blob||blob.size<1000){setIsProcessing(false);setError('No audio detected. Please try speaking again.');return;}
+
+      // Transcribe with Whisper
+      const text=await openaiWhisper(blob);
+      if(!text){setIsProcessing(false);setError('Could not transcribe audio. Please try again.');return;}
+
+      // Add user response to transcript
+      const userEntry={role:'user',text,ts:new Date().toISOString()};
+      const newTranscript=[...transcript,userEntry];
+      setTranscript(newTranscript);
+
+      // Calculate remaining time
+      const elapsedSec=Math.floor((Date.now()-startRef.current)/1000);
+      const remainingSec=maxSec-elapsedSec;
+
+      // Determine if we should move to next starter question or generate a follow-up
+      const answeredStarterCount=newTranscript.filter(t=>t.role==='ai').length;
+      const hasMoreStarters=currentQIdx<starterQs.length;
+      // Time management: calculate how much time per remaining question
+      const remainingStarters=starterQs.length-currentQIdx;
+      const timePerQuestion=remainingStarters>0?Math.floor(remainingSec/(remainingStarters+1)):remainingSec;
+      const shouldProbe=timePerQuestion>30&&remainingSec>60; // enough time to probe deeper
+
+      let aiResponse;
+      if(remainingSec<30){
+        // Wrapping up
+        aiResponse='Thank you so much for sharing your thoughts! That\'s all the time we have. Your insights are incredibly valuable.';
+      } else if(shouldProbe&&!hasMoreStarters){
+        // Generate follow-up based on conversation
+        aiResponse=await generateFollowUp(newTranscript,objective,remainingSec);
+      } else if(shouldProbe&&hasMoreStarters&&timePerQuestion>45){
+        // Probe on current answer before moving to next starter
+        aiResponse=await generateFollowUp(newTranscript,objective,Math.min(timePerQuestion,60));
+      } else if(hasMoreStarters){
+        // Move to next starter question
+        const nextQ=starterQs[currentQIdx];
+        aiResponse='Thank you for that. '+nextQ;
+        setCurrentQIdx(prev=>prev+1);
+      } else {
+        // Wrap up
+        aiResponse=await generateFollowUp(newTranscript,objective,remainingSec);
+      }
+
+      const aiEntry={role:'ai',text:aiResponse,ts:new Date().toISOString()};
+      const finalTranscript=[...newTranscript,aiEntry];
+      setTranscript(finalTranscript);
+      update({transcript:finalTranscript});
+      setIsProcessing(false);
+
+      // Check if AI signaled end
+      if(remainingSec<30){
+        setTimeout(()=>wrapUp(),2000);
+      } else {
+        await speak(aiResponse);
+      }
+    }catch(err){
+      setIsProcessing(false);
+      setError('Error processing response: '+(err.message||'Unknown error'));
+    }
+  };
+
+  // Generate dynamic follow-up via OpenAI
+  const generateFollowUp=async(trans,obj,remainSec)=>{
+    const conversationText=trans.map(t=>`${t.role==='ai'?'Interviewer':'Participant'}: ${t.text}`).join('\n');
+    const systemPrompt=`You are a skilled UX research interviewer conducting a user interview. Your research objective is: "${obj}"
+
+You are having a voice conversation. Keep your responses conversational, warm, and concise (1-3 sentences).
+
+Guidelines:
+- Ask ONE clear follow-up question at a time
+- Probe deeper into interesting points the participant raised
+- Use active listening — reference specifics from their answers
+- If they mention something relevant to the objective, explore it further
+- You have approximately ${remainSec} seconds remaining in this interview
+${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question':'- Continue probing for insights'}
+- Never repeat a question already asked
+- Be empathetic and encouraging`;
+
+    const messages=[
+      {role:'system',content:systemPrompt},
+      {role:'user',content:`Here is the conversation so far:\n\n${conversationText}\n\nGenerate your next interviewer response (1-3 sentences, ending with a follow-up question):`}
+    ];
+    return openaiChat(messages,{maxTokens:200,temperature:0.7});
+  };
+
+  // End the interview
+  const wrapUp=()=>{
+    clearInterval(timerRef.current);
+    if(mediaRecRef.current&&mediaRecRef.current.state!=='inactive'){
+      mediaRecRef.current.stream.getTracks().forEach(t=>t.stop());
+      mediaRecRef.current=null;
+    }
+    setIsRecording(false);
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+    setPhase('done');
+    const finalTranscript=[...transcript];
+    update({
+      transcript:finalTranscript,
+      completed_at:new Date().toISOString(),
+      duration_ms:startRef.current?Date.now()-startRef.current:0,
+      total_exchanges:finalTranscript.length,
+      device_type:/Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop'
+    });
+  };
+
+  // No API key configured
+  if(!OPENAI_KEY){
+    return React.createElement('div',{style:{padding:20,textAlign:'center',color:'#ef4444'}},
+      mIcon('error_outline',{size:32,style:{display:'block',margin:'0 auto 8px'}}),
+      React.createElement('p',{style:{fontWeight:600,marginBottom:4}},'AI Interview Unavailable'),
+      React.createElement('p',{style:{fontSize:13,color:'#6b7280'}},'No OpenAI API key configured. The survey administrator needs to set the VITE_OPENAI_API_KEY environment variable.')
+    );
+  }
+
+  // Phase: idle — show objective, duration, and Start button
+  if(phase==='idle'){
+    return React.createElement('div',null,
+      objective&&React.createElement('div',{style:{background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:10,padding:'14px 18px',marginBottom:16}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:6}},
+          mIcon('psychology',{size:18,style:{color:'#9333ea'}}),
+          React.createElement('span',{style:{fontWeight:600,fontSize:14,color:'#581c87'}},'Interview Topic')
+        ),
+        React.createElement('p',{style:{fontSize:14,color:'#334155',lineHeight:1.5}},objective)
+      ),
+      React.createElement('div',{style:{border:'2px dashed #d1d5db',borderRadius:12,padding:'32px 20px',textAlign:'center',background:'#fafafa',marginBottom:12}},
+        mIcon('mic',{size:48,style:{color:brand||'#9333ea',display:'block',margin:'0 auto 12px'}}),
+        React.createElement('p',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:6}},'AI-Moderated Voice Interview'),
+        React.createElement('p',{style:{fontSize:13,color:'#6b7280',marginBottom:4}},'You\'ll have a conversation with an AI interviewer who will ask questions and follow up based on your answers.'),
+        React.createElement('p',{style:{fontSize:12,color:'#9ca3af',marginBottom:16}},`Duration: ${q.ai_duration||'3-5'} minutes`+(ttsEnabled?' · The AI will speak its questions aloud':'')),
+        React.createElement('div',{style:{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:12,color:'#92400e',display:'inline-block',textAlign:'left'}},
+          mIcon('info',{size:14,style:{verticalAlign:'middle',marginRight:4}}),'Your microphone will be used to capture your responses. Audio is transcribed to text only — no recordings are stored.'
+        ),
+        React.createElement('div',null,
+          React.createElement('button',{
+            onClick:startInterview,
+            style:{background:brand||'#9333ea',color:'white',border:'none',padding:'10px 28px',borderRadius:10,fontSize:15,fontWeight:600,cursor:'pointer',transition:'all .15s'}
+          },'Begin Interview')
+        )
+      )
+    );
+  }
+
+  // Phase: interviewing — conversation flow
+  if(phase==='interviewing'){
+    return React.createElement('div',null,
+      // Timer bar
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 14px',background:'#111827',color:'white',fontSize:13,borderRadius:'10px 10px 0 0',marginBottom:0}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+          mIcon('timer',{size:16,style:{color:elapsed<maxSec*0.8?'#4ade80':'#fbbf24'}}),
+          React.createElement('span',{style:{fontWeight:600,fontVariantNumeric:'tabular-nums'}},formatTime(elapsed)),
+          React.createElement('span',{style:{color:'#9ca3af',fontSize:11}},` / ${formatTime(maxSec)}`)
+        ),
+        React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+          isRecording&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#ef4444'}},
+            React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:'#ef4444',animation:'pulse 1.5s infinite'}}),
+            'Recording'
+          ),
+          isSpeaking&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#4ade80'}},
+            mIcon('volume_up',{size:14}),'Speaking'
+          ),
+          React.createElement('button',{onClick:wrapUp,style:{background:'transparent',border:'1px solid #4b5563',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,cursor:'pointer'}},'End Interview')
+        )
+      ),
+      // Progress bar
+      React.createElement('div',{style:{height:3,background:'#374151'}},
+        React.createElement('div',{style:{height:'100%',background:elapsed<maxSec*0.8?'#4ade80':'#fbbf24',width:`${Math.min(100,(elapsed/maxSec)*100)}%`,transition:'width 1s linear'}})
+      ),
+      // Transcript display
+      React.createElement('div',{style:{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'0 0 10px 10px',padding:'16px',maxHeight:350,overflowY:'auto',marginBottom:16}},
+        transcript.length===0&&React.createElement('div',{style:{textAlign:'center',color:'#9ca3af',padding:20}},'Interview starting...'),
+        transcript.map((entry,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:10,marginBottom:12,flexDirection:entry.role==='ai'?'row':'row-reverse'}},
+          React.createElement('div',{style:{width:32,height:32,borderRadius:'50%',background:entry.role==='ai'?'#9333ea':'#3b82f6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+            mIcon(entry.role==='ai'?'smart_toy':'person',{size:18,style:{color:'white'}})
+          ),
+          React.createElement('div',{style:{maxWidth:'75%',padding:'10px 14px',borderRadius:12,background:entry.role==='ai'?'white':'#eff6ff',border:'1px solid '+(entry.role==='ai'?'#e5e7eb':'#bfdbfe'),fontSize:14,lineHeight:1.5,color:'#111827'}},
+            entry.text
+          )
+        )),
+        isProcessing&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12}},
+          React.createElement('div',{style:{width:32,height:32,borderRadius:'50%',background:'#9333ea',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+            mIcon('smart_toy',{size:18,style:{color:'white'}})
+          ),
+          React.createElement('div',{style:{padding:'10px 14px',borderRadius:12,background:'white',border:'1px solid #e5e7eb',fontSize:13,color:'#9ca3af'}},
+            'Thinking...'
+          )
+        )
+      ),
+      // Action buttons
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',gap:12}},
+        !isRecording&&!isProcessing&&!isSpeaking&&React.createElement('button',{
+          onClick:startRecording,
+          style:{background:'#ef4444',color:'white',border:'none',padding:'12px 28px',borderRadius:50,fontSize:15,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .15s',boxShadow:'0 4px 14px rgba(239,68,68,0.4)'}
+        },mIcon('mic',{size:20,style:{color:'white'}}),'Hold to Speak'),
+        isRecording&&React.createElement('button',{
+          onClick:handleUserResponse,
+          style:{background:'#111827',color:'white',border:'none',padding:'12px 28px',borderRadius:50,fontSize:15,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .15s',animation:'pulse 1.5s infinite'}
+        },mIcon('stop',{size:20,style:{color:'white'}}),'Done Speaking'),
+        isProcessing&&React.createElement('div',{style:{padding:'12px 28px',fontSize:14,color:'#6b7280'}},
+          'Processing your response...'
+        ),
+        isSpeaking&&React.createElement('div',{style:{padding:'12px 28px',fontSize:14,color:'#9333ea',display:'flex',alignItems:'center',gap:8}},
+          mIcon('volume_up',{size:18,style:{color:'#9333ea'}}),'AI is speaking...'
+        )
+      ),
+      error&&React.createElement('div',{style:{marginTop:12,padding:'8px 14px',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,fontSize:13,color:'#dc2626',textAlign:'center'}},error)
+    );
+  }
+
+  // Phase: done
+  return React.createElement('div',null,
+    React.createElement('div',{style:{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:10,padding:'16px',marginBottom:16,textAlign:'center'}},
+      mIcon('check_circle',{size:36,style:{color:'#16a34a',display:'block',margin:'0 auto 8px'}}),
+      React.createElement('p',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:4}},'Interview Complete!'),
+      React.createElement('p',{style:{fontSize:13,color:'#6b7280'}},`${transcript.length} exchanges · ${val.duration_ms?formatTime(Math.floor(val.duration_ms/1000)):'-'} duration`)
+    ),
+    // Show transcript summary
+    React.createElement('div',{style:{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:10,padding:'14px',maxHeight:250,overflowY:'auto'}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#6b7280',marginBottom:8}},'Conversation Summary'),
+      transcript.map((entry,i)=>React.createElement('div',{key:i,style:{marginBottom:8,fontSize:13,lineHeight:1.4}},
+        React.createElement('span',{style:{fontWeight:600,color:entry.role==='ai'?'#9333ea':'#3b82f6'}},entry.role==='ai'?'AI: ':'You: '),
+        React.createElement('span',{style:{color:'#374151'}},entry.text)
+      ))
     )
   );
 }
@@ -2329,6 +2828,84 @@ function QuestionCharts({survey}){
               React.createElement('span',{style:{color:'#9ca3af',fontWeight:600,marginRight:6}},`R${i+1}`),txt
             )),
             feedbackTexts.length>10&&React.createElement('div',{style:{fontSize:12,color:'#9ca3af',textAlign:'center',marginTop:8}},`+${feedbackTexts.length-10} more comments`)
+          )
+        );
+      } else if(q.type==='ai_interview'){
+        // AI Interview Analytics
+        const parsed=answers.map(a=>{const rv=a.raw_value;return rv&&typeof rv==='object'?rv:null;}).filter(Boolean);
+        const n=parsed.length;
+        // Duration stats
+        const durations=parsed.filter(r=>r.duration_ms>0).map(r=>r.duration_ms);
+        const avgDur=durations.length>0?Math.round(durations.reduce((a,b)=>a+b,0)/durations.length/1000):0;
+        // Exchange stats
+        const exchanges=parsed.filter(r=>r.total_exchanges>0).map(r=>r.total_exchanges);
+        const avgExchanges=exchanges.length>0?Math.round(exchanges.reduce((a,b)=>a+b,0)/exchanges.length):0;
+        // Collect all transcripts
+        const allTranscripts=parsed.filter(r=>Array.isArray(r.transcript)&&r.transcript.length>0).map(r=>r.transcript);
+        const allUserResponses=allTranscripts.flatMap(t=>t.filter(e=>e.role==='user').map(e=>e.text));
+        // Word frequency from user responses
+        const stopWords=new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','is','are','was','were','be','been','have','has','had','do','does','did','will','would','could','should','that','this','it','its','i','me','my','we','you','they','not','so','if','as','just','can','very','also','like','some','there','more','how','what','who']);
+        const wordFreq={};
+        allUserResponses.forEach(text=>{
+          const words=text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>3&&!stopWords.has(w));
+          words.forEach(w=>{wordFreq[w]=(wordFreq[w]||0)+1;});
+        });
+        const topWords=Object.entries(wordFreq).sort((a,b)=>b[1]-a[1]).slice(0,15);
+        const maxWF=topWords.length>0?topWords[0][1]:1;
+
+        content=React.createElement('div',null,
+          // Summary metrics
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
+            React.createElement('div',{style:{background:HALO.rgba(HALO.purple,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.purple}},n),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Interviews'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},'completed')
+            ),
+            React.createElement('div',{style:{background:HALO.rgba(HALO.blue,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.blue}},`${avgDur}s`),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Avg Duration'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},`${Math.round(avgDur/60)} min avg`)
+            ),
+            React.createElement('div',{style:{background:HALO.rgba(HALO.green,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.green}},avgExchanges),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Avg Exchanges'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},'per interview')
+            ),
+            React.createElement('div',{style:{background:HALO.rgba(HALO.orange,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.orange}},allUserResponses.length),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Total Responses'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},'from all participants')
+            )
+          ),
+          // Top keywords from user responses
+          topWords.length>0&&React.createElement('div',{style:{marginBottom:20}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:10}},'Top Keywords from Responses'),
+            topWords.map(([word,cnt])=>React.createElement('div',{key:word,className:'mb-1.5'},
+              React.createElement('div',{className:'flex justify-between mb-0.5 text-sm'},
+                React.createElement('span',{style:{fontWeight:500}},word),
+                React.createElement('span',{style:{color:'#6b7280'}},`${cnt}x`)
+              ),
+              React.createElement('div',{className:'h-3 bg-gray-100 rounded overflow-hidden'},
+                React.createElement('div',{style:{height:'100%',borderRadius:4,background:HALO.purple,width:`${(cnt/maxWF)*100}%`,transition:'width .3s'}})
+              )
+            ))
+          ),
+          // Individual transcripts
+          allTranscripts.length>0&&React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:10}},`Interview Transcripts (${allTranscripts.length})`),
+            allTranscripts.slice(0,8).map((trans,i)=>React.createElement('details',{key:i,style:{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:8,marginBottom:8,overflow:'hidden'}},
+              React.createElement('summary',{style:{padding:'10px 14px',cursor:'pointer',fontSize:13,fontWeight:500,color:'#374151',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+                React.createElement('span',null,`Respondent ${i+1}`),
+                React.createElement('span',{style:{fontSize:11,color:'#9ca3af'}},`${trans.length} exchanges`)
+              ),
+              React.createElement('div',{style:{padding:'8px 14px',borderTop:'1px solid #e5e7eb',maxHeight:250,overflowY:'auto'}},
+                trans.map((entry,j)=>React.createElement('div',{key:j,style:{marginBottom:6,fontSize:12,lineHeight:1.4}},
+                  React.createElement('span',{style:{fontWeight:600,color:entry.role==='ai'?'#9333ea':'#3b82f6',marginRight:6}},entry.role==='ai'?'AI:':'User:'),
+                  React.createElement('span',{style:{color:'#374151'}},entry.text)
+                ))
+              )
+            )),
+            allTranscripts.length>8&&React.createElement('div',{style:{fontSize:12,color:'#9ca3af',textAlign:'center',marginTop:8}},`+${allTranscripts.length-8} more transcripts`)
           )
         );
       }
