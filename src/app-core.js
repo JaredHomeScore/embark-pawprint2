@@ -16,6 +16,16 @@ const LS = {
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const now=()=>new Date().toISOString();
 
+// ── EMBARK HALO PALETTE (for charts & visualizations) ────────────────────────
+const HALO={
+  gold:'#FFCE34',blue:'#65CBFF',coral:'#FF6666',purple:'#B152E0',
+  orange:'#FFAA33',green:'#98D147',pink:'#FF66CC',indigo:'#6E6EF7',
+  // Ordered array for cycling through chart series
+  cycle:['#FFCE34','#65CBFF','#FF6666','#B152E0','#FFAA33','#98D147','#FF66CC','#6E6EF7'],
+  // Utility: return rgba version of a hex at given opacity
+  rgba:(hex,a)=>{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
+};
+
 // ── ICON HELPER ──────────────────────────────────────────────────────────────
 const mIcon=(name,props={})=>React.createElement('span',{className:'material-symbols-outlined',style:{fontSize:props.size||20,verticalAlign:'middle',...props.style},...props},name);
 
@@ -1079,6 +1089,13 @@ function RespondentView({token}){
       :LS.where('surveys',x=>x.token===token&&x.status==='published')[0];
     if(!s){setState('error');return;}
     setSurvey(s);
+    // Check if this respondent already completed this survey (not in preview mode)
+    if(!isPreviewMode){
+      try{
+        const takenKey='sl_taken_'+s.id;
+        if(localStorage.getItem(takenKey)){setState('already_taken');return;}
+      }catch{}
+    }
     setState('welcome');
   },[]);// eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1152,10 +1169,18 @@ function RespondentView({token}){
     if(isPreviewMode){setState('done');return;}
     const ms=Date.now()-startTime;
     LS.update('sessions',sessionId,{status:'completed',respondent_email:email||null,completion_ms:ms,submitted_at:now()});
+    // Mark survey as taken so this respondent cannot retake it
+    try{localStorage.setItem('sl_taken_'+survey.id,now());}catch{}
     setState('done');
   };
 
   if(state==='loading')return React.createElement('div',{style:{padding:60,textAlign:'center',color:'var(--gray-400)'}},'Loading...');
+  if(state==='already_taken')return React.createElement('div',{style:{padding:60,textAlign:'center',maxWidth:480,margin:'0 auto'}},
+    React.createElement('div',{style:{width:72,height:72,borderRadius:'50%',background:'#f0fdf4',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:20}},mIcon('check_circle',{size:40,style:{color:'#16a34a'}})),
+    React.createElement('h2',{className:'font-display',style:{fontSize:22,fontWeight:700,color:'#111827',marginBottom:8}},'You\'ve already completed this survey'),
+    React.createElement('p',{className:'text-gray-500',style:{marginTop:8,fontSize:15,lineHeight:1.6}},'Thank you for your participation! Your response has been recorded. Each person may only submit one response.'),
+    React.createElement('p',{className:'text-gray-400',style:{marginTop:16,fontSize:12}},'If you believe this is an error, please contact the survey creator.')
+  );
   if(state==='error')return React.createElement('div',{style:{padding:60,textAlign:'center'}},
     React.createElement('h2',null,'Survey not found'),
     React.createElement('p',{className:'text-gray-500',style:{marginTop:8}},'This link is invalid or the survey has closed.')
@@ -1955,7 +1980,7 @@ function AnalyticsOverview({survey}){
       React.createElement('div',{className:'bg-white rounded-lg border border-gray-200 shadow-sm'},
         React.createElement('div',{className:'px-5 py-3.5 border-b border-gray-100 flex items-center justify-between'},React.createElement('div',{className:'text-base font-semibold text-gray-800 font-display'},'Response Volume (14 days)')),
         React.createElement('div',{className:'px-5 py-4'},
-          volData.length>0?React.createElement(SimpleBarChart,{data:volData,labelKey:'day',valueKey:'count',color:'#00ACBD',height:160}):React.createElement('div',{className:'text-gray-500 text-sm'},'No data yet.')
+          volData.length>0?React.createElement(SimpleBarChart,{data:volData,labelKey:'day',valueKey:'count',color:HALO.blue,height:160}):React.createElement('div',{className:'text-gray-500 text-sm'},'No data yet.')
         )
       ),
       React.createElement('div',{className:'bg-white rounded-lg border border-gray-200 shadow-sm'},
@@ -2057,7 +2082,7 @@ function QuestionCharts({survey}){
         const items=Object.entries(dist).sort((a,b)=>b[1]-a[1]);
         content=items.map(([val,cnt])=>React.createElement('div',{key:val,className:'mb-2.25'},
           React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},React.createElement('span',null,val),React.createElement('span',null,`${cnt} (${(cnt/answers.length*100).toFixed(0)}%)`)),
-          React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full bg-embark-teal rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${cnt/answers.length*100}%`}}))
+          React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${cnt/answers.length*100}%`,background:HALO.blue}}))
         ));
       } else if(q.type==='multiple_select'){
         const dist={};
@@ -2065,7 +2090,7 @@ function QuestionCharts({survey}){
         const items=Object.entries(dist).sort((a,b)=>b[1]-a[1]);
         content=items.map(([val,cnt])=>React.createElement('div',{key:val,className:'mb-2.25'},
           React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},React.createElement('span',null,val),React.createElement('span',null,`${cnt} (${(cnt/answers.length*100).toFixed(0)}%)`)),
-          React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full bg-embark-teal rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${cnt/answers.length*100}%`}}))
+          React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${cnt/answers.length*100}%`,background:HALO.blue}}))
         ));
       } else if(['card_sort_open','card_sort_closed'].includes(q.type)){
         // Card Sort Analytics
@@ -2112,7 +2137,7 @@ function QuestionCharts({survey}){
                         const cnt=row[cid]||0;
                         const pct=n>0?Math.round((cnt/n)*100):0;
                         const intensity=n>0?cnt/n:0;
-                        const bg=`rgba(0,172,189,${Math.max(0.05,intensity)})`;
+                        const bg=HALO.rgba(HALO.indigo,Math.max(0.05,intensity));
                         const textColor=intensity>0.6?'white':'#374151';
                         return React.createElement('td',{key:cid,style:{textAlign:'center',padding:'6px 8px',background:bg,color:textColor,fontWeight:intensity>0.4?600:400,borderBottom:'1px solid #f3f4f6',borderLeft:'1px solid #f3f4f6',transition:'all .2s'}},
                           cnt>0?`${pct}%`:'-'
@@ -2125,7 +2150,7 @@ function QuestionCharts({survey}){
             ),
             React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginTop:12,fontSize:11,color:'#9ca3af'}},
               React.createElement('span',null,'Agreement: '),
-              [0.1,0.3,0.5,0.7,0.9].map(v=>React.createElement('div',{key:v,style:{width:24,height:14,borderRadius:3,background:`rgba(0,172,189,${v})`}})),
+              [0.1,0.3,0.5,0.7,0.9].map(v=>React.createElement('div',{key:v,style:{width:24,height:14,borderRadius:3,background:HALO.rgba(HALO.indigo,v)}})),
               React.createElement('span',null,'Low → High')
             )
           );
@@ -2169,7 +2194,7 @@ function QuestionCharts({survey}){
                       if(c1.id===c2.id)return React.createElement('td',{key:c2.id,style:{background:'#f3f4f6',width:28,height:28}});
                       const cnt=coMatrix[c1.id]?.[c2.id]||0;
                       const pct=n>0?cnt/n:0;
-                      return React.createElement('td',{key:c2.id,style:{width:28,height:28,textAlign:'center',fontSize:10,background:`rgba(0,172,189,${Math.max(0.03,pct)})`,color:pct>0.5?'white':'#374151',fontWeight:pct>0.4?600:400,border:'1px solid #f9fafb'}},
+                      return React.createElement('td',{key:c2.id,style:{width:28,height:28,textAlign:'center',fontSize:10,background:HALO.rgba(HALO.purple,Math.max(0.03,pct)),color:pct>0.5?'white':'#374151',fontWeight:pct>0.4?600:400,border:'1px solid #f9fafb'}},
                         cnt>0?cnt:''
                       );
                     })
@@ -2181,7 +2206,7 @@ function QuestionCharts({survey}){
             topCats.length>0&&React.createElement('div',null,
               React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'#374151',marginBottom:8}},'Most common category names created by respondents'),
               React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},
-                topCats.map(([name,cnt])=>React.createElement('div',{key:name,style:{padding:'6px 12px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:20,fontSize:12,fontWeight:500,color:'#166534'}},
+                topCats.map(([name,cnt])=>React.createElement('div',{key:name,style:{padding:'6px 12px',background:HALO.rgba(HALO.green,0.12),border:'1px solid '+HALO.rgba(HALO.green,0.3),borderRadius:20,fontSize:12,fontWeight:500,color:'#166534'}},
                   `"${name}" (${cnt})`
                 ))
               )
@@ -2207,11 +2232,11 @@ function QuestionCharts({survey}){
           React.createElement('p',{style:{fontSize:12,color:'#6b7280',marginBottom:10}},'Average rank position (lower = ranked higher by respondents)'),
           items.map((item,ri)=>React.createElement('div',{key:item.id,className:'mb-2.25'},
             React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},
-              React.createElement('span',null,React.createElement('strong',{style:{color:'#00ACBD',marginRight:6}},'#'+(ri+1)),item.label),
+              React.createElement('span',null,React.createElement('strong',{style:{color:HALO.orange,marginRight:6}},'#'+(ri+1)),item.label),
               React.createElement('span',{style:{color:'#6b7280'}},`avg rank ${item.avg.toFixed(1)}`)
             ),
             React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},
-              React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out',style:{width:`${(1-(item.avg-1)/(worst))*100}%`,background:'#00ACBD'}})
+              React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out',style:{width:`${(1-(item.avg-1)/(worst))*100}%`,background:HALO.orange}})
             )
           ))
         );
@@ -2235,30 +2260,30 @@ function QuestionCharts({survey}){
         // Feedback texts
         const feedbackTexts=parsed.filter(r=>r.open_text_feedback&&r.open_text_feedback.trim()).map(r=>r.open_text_feedback.trim());
         const diffLabels={1:'Very Easy',2:'Easy',3:'Moderate',4:'Hard',5:'Very Hard'};
-        const diffColors={1:'#16a34a',2:'#65a30d',3:'#ca8a04',4:'#ea580c',5:'#dc2626'};
+        const diffColors={1:HALO.green,2:HALO.blue,3:HALO.gold,4:HALO.orange,5:HALO.coral};
 
         content=React.createElement('div',null,
           // Summary metrics row
           React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
-            React.createElement('div',{style:{background:'#f0fdf4',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
-              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#16a34a'}},`${successRate}%`),
-              React.createElement('div',{style:{fontSize:11,color:'#4ade80',fontWeight:600,marginTop:2}},'Success Rate'),
-              React.createElement('div',{style:{fontSize:10,color:'#86efac'}},`${yesCount}/${n} completed`)
+            React.createElement('div',{style:{background:HALO.rgba(HALO.green,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.green}},`${successRate}%`),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Success Rate'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},`${yesCount}/${n} completed`)
             ),
-            React.createElement('div',{style:{background:'#f0f9ff',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
-              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#0284c7'}},`${avgTime}s`),
-              React.createElement('div',{style:{fontSize:11,color:'#38bdf8',fontWeight:600,marginTop:2}},'Avg Time on Task'),
-              React.createElement('div',{style:{fontSize:10,color:'#7dd3fc'}},`Median: ${medianTime}s`)
+            React.createElement('div',{style:{background:HALO.rgba(HALO.blue,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.blue}},`${avgTime}s`),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Avg Time on Task'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},`Median: ${medianTime}s`)
             ),
-            React.createElement('div',{style:{background:'#faf5ff',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
-              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#9333ea'}},avgDiff),
-              React.createElement('div',{style:{fontSize:11,color:'#c084fc',fontWeight:600,marginTop:2}},'Avg Difficulty'),
-              React.createElement('div',{style:{fontSize:10,color:'#d8b4fe'}},`1=Easy, 5=Hard`)
+            React.createElement('div',{style:{background:HALO.rgba(HALO.purple,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.purple}},avgDiff),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Avg Difficulty'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},`1=Easy, 5=Hard`)
             ),
-            React.createElement('div',{style:{background:'#fff7ed',borderRadius:10,padding:'14px 16px',textAlign:'center'}},
-              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:'#ea580c'}},feedbackTexts.length),
-              React.createElement('div',{style:{fontSize:11,color:'#fb923c',fontWeight:600,marginTop:2}},'Feedback Comments'),
-              React.createElement('div',{style:{fontSize:10,color:'#fdba74'}},`of ${n} respondents`)
+            React.createElement('div',{style:{background:HALO.rgba(HALO.orange,0.12),borderRadius:10,padding:'14px 16px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:28,fontWeight:800,color:HALO.orange}},feedbackTexts.length),
+              React.createElement('div',{style:{fontSize:11,color:'#374151',fontWeight:600,marginTop:2}},'Feedback Comments'),
+              React.createElement('div',{style:{fontSize:10,color:'#6b7280'}},`of ${n} respondents`)
             )
           ),
           // Difficulty distribution bars
@@ -2290,7 +2315,7 @@ function QuestionCharts({survey}){
                   const cnt=buckets[i]||0;
                   const label=Math.round((minT+i*bucketSize)/1000)+'s';
                   return React.createElement('div',{key:i,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
-                    React.createElement('div',{style:{width:'100%',height:`${(cnt/maxB)*60}px`,background:'#0284c7',borderRadius:'3px 3px 0 0',minHeight:cnt>0?4:0,transition:'height .3s'}}),
+                    React.createElement('div',{style:{width:'100%',height:`${(cnt/maxB)*60}px`,background:HALO.indigo,borderRadius:'3px 3px 0 0',minHeight:cnt>0?4:0,transition:'height .3s'}}),
                     React.createElement('span',{style:{fontSize:9,color:'#9ca3af'}},label)
                   );
                 });
@@ -2352,7 +2377,7 @@ function OpenTextAnalysis({survey}){
 
   const addTheme=()=>{
     if(!newTheme.trim()||!selQ)return;
-    const colors=['#00ACBD','#FFCE34','#000000','#10b981','#ef4444','#8b5cf6','#0ea5e9'];
+    const colors=HALO.cycle;
     const t={id:uid(),survey_id:survey.id,question_id:selQ,name:newTheme,color:colors[themes.filter(x=>x.question_id===selQ).length%colors.length],answer_ids:[]};
     LS.insert('themes',t);
     setThemes(LS.where('themes',x=>x.survey_id===survey.id));
@@ -2427,7 +2452,7 @@ function OpenTextAnalysis({survey}){
             phraseData.phrases.length>0?
             phraseData.phrases.map((p,i)=>React.createElement('div',{key:i,className:'mb-2.25'},
               React.createElement('div',{className:'flex justify-between mb-0.75 text-sm'},React.createElement('span',null,p.phrase),React.createElement('span',null,p.count)),
-              React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full bg-embark-teal rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${(p.count/(phraseData.phrases[0]?.count||1))*100}%`}}))
+              React.createElement('div',{className:'h-5 bg-gray-100 rounded overflow-hidden'},React.createElement('div',{className:'h-full rounded transition-all duration-500 ease-out flex items-center pl-1.25',style:{width:`${(p.count/(phraseData.phrases[0]?.count||1))*100}%`,background:HALO.indigo}}))
             )):React.createElement('div',{className:'text-gray-500 text-sm'},'Not enough responses yet.')
           )
         )
