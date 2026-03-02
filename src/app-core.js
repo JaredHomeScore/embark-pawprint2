@@ -1722,35 +1722,101 @@ async function openaiWhisper(audioBlob){
   if(!res.ok)throw new Error('Whisper API error: '+res.status);
   return (await res.text()).trim();
 }
+async function openaiTTS(text){
+  if(!OPENAI_KEY)throw new Error('No OpenAI API key configured');
+  const res=await fetch('https://api.openai.com/v1/audio/speech',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+OPENAI_KEY},
+    body:JSON.stringify({model:'tts-1',voice:'nova',input:text,response_format:'mp3'})
+  });
+  if(!res.ok)throw new Error('TTS API error: '+res.status);
+  const buf=await res.arrayBuffer();
+  return new Blob([buf],{type:'audio/mpeg'});
+}
+
+// ── SOUND WAVE + PAW PRINT ANIMATION ─────────────────────────────────────
+function SpeakingAnimation(){
+  const canvasRef=useRef(null);
+  const animRef=useRef(null);
+  useEffect(()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    const W=canvas.width=280,H=canvas.height=80;
+    let t=0;
+    const pawPath=(cx,cy,s)=>{
+      ctx.beginPath();ctx.ellipse(cx,cy,s*1.3,s*1.6,0,0,Math.PI*2);ctx.fill();
+      const toeOff=[[-1.1,-1.8],[1.1,-1.8],[-1.7,-0.6],[1.7,-0.6]];
+      toeOff.forEach(([ox,oy])=>{ctx.beginPath();ctx.ellipse(cx+ox*s,cy+oy*s,s*0.45,s*0.55,0,0,Math.PI*2);ctx.fill();});
+    };
+    const draw=()=>{
+      t+=0.06;
+      ctx.clearRect(0,0,W,H);
+      // wave bars
+      const bars=18,barW=6,gap=10;
+      const startX=(W-(bars*(barW+gap)-gap))/2;
+      for(let i=0;i<bars;i++){
+        const x=startX+i*(barW+gap);
+        const amp=20+10*Math.sin(t+i*0.5)*Math.cos(t*0.7+i*0.3);
+        const h=Math.abs(amp);
+        const y=(H-h)/2;
+        const hue=270+i*3;
+        ctx.fillStyle=`hsla(${hue},70%,60%,${0.6+0.4*Math.sin(t+i*0.4)})`;
+        ctx.beginPath();ctx.roundRect(x,y,barW,h,3);ctx.fill();
+      }
+      // paw prints
+      ctx.fillStyle='rgba(147,51,234,0.25)';
+      const p1y=H*0.3+Math.sin(t*1.2)*6;
+      pawPath(30,p1y,4);
+      const p2y=H*0.7+Math.cos(t*1.1)*6;
+      pawPath(W-30,p2y,4);
+      animRef.current=requestAnimationFrame(draw);
+    };
+    draw();
+    return()=>cancelAnimationFrame(animRef.current);
+  },[]);
+  return React.createElement('canvas',{ref:canvasRef,style:{display:'block',margin:'0 auto'}});
+}
 
 // ── AI INTERVIEW WIDGET (Respondent) ──────────────────────────────────────
 function AIInterviewWidget({q,value,onChange,brand}){
   const val=value&&typeof value==='object'?value:{};
-  // Phases: consent → idle → interviewing → done
   const[phase,setPhase]=useState(val.completed_at?'done':'idle');
-  const[transcript,setTranscript]=useState(val.transcript||[]); // [{role:'ai'|'user',text,ts}]
+  const[transcript,setTranscript]=useState(val.transcript||[]);
   const[isRecording,setIsRecording]=useState(false);
   const[isProcessing,setIsProcessing]=useState(false);
   const[isSpeaking,setIsSpeaking]=useState(false);
+  const[isListening,setIsListening]=useState(false); // listening for user (mic open, waiting for speech)
   const[elapsed,setElapsed]=useState(0);
-  const[currentQIdx,setCurrentQIdx]=useState(0); // index into starter questions
+  const[currentQIdx,setCurrentQIdx]=useState(0);
   const[error,setError]=useState(null);
 
   const mediaRecRef=useRef(null);
+  const streamRef=useRef(null); // keep mic stream alive across turns
   const chunksRef=useRef([]);
   const timerRef=useRef(null);
   const startRef=useRef(null);
-  const synthRef=useRef(null);
+  const audioElRef=useRef(null);
+  const silenceTimerRef=useRef(null);
+  const analyserRef=useRef(null);
+  const vadFrameRef=useRef(null);
+  const transcriptRef=useRef(val.transcript||[]);
+  const currentQIdxRef=useRef(0);
+  const phaseRef=useRef('idle');
+
   const starterQs=(q.ai_starter_questions||[]).filter(s=>s.trim());
   const objective=q.ai_objective||'';
   const ttsEnabled=q.ai_tts_enabled!==false;
 
-  // Duration mapping in seconds
   const durationMap={'1-3':{min:60,max:180},'3-5':{min:180,max:300},'7-9':{min:420,max:540}};
   const dur=durationMap[q.ai_duration]||durationMap['3-5'];
   const maxSec=dur.max;
 
   const update=(patch)=>{const next={...val,...patch};onChange(q,next);};
+
+  // Keep refs in sync
+  useEffect(()=>{transcriptRef.current=transcript;},[transcript]);
+  useEffect(()=>{currentQIdxRef.current=currentQIdx;},[currentQIdx]);
+  useEffect(()=>{phaseRef.current=phase;},[phase]);
 
   // Timer
   useEffect(()=>{
@@ -1767,51 +1833,108 @@ function AIInterviewWidget({q,value,onChange,brand}){
 
   const formatTime=(s)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
-  // TTS: speak text using browser SpeechSynthesis
+  // ── OpenAI TTS: speak using Nova voice ──
   const speak=(text)=>{
-    if(!ttsEnabled||!window.speechSynthesis)return Promise.resolve();
-    return new Promise(resolve=>{
-      window.speechSynthesis.cancel();
-      const utter=new SpeechSynthesisUtterance(text);
-      utter.rate=1.0;utter.pitch=1.0;
-      // Try to pick a natural-sounding voice
-      const voices=window.speechSynthesis.getVoices();
-      const preferred=voices.find(v=>v.name.includes('Samantha'))||voices.find(v=>v.lang.startsWith('en')&&!v.localService)||voices[0];
-      if(preferred)utter.voice=preferred;
-      utter.onend=()=>{setIsSpeaking(false);resolve();};
-      utter.onerror=()=>{setIsSpeaking(false);resolve();};
-      setIsSpeaking(true);
-      synthRef.current=utter;
-      window.speechSynthesis.speak(utter);
+    if(!ttsEnabled)return Promise.resolve();
+    return new Promise(async(resolve)=>{
+      try{
+        setIsSpeaking(true);
+        const blob=await openaiTTS(text);
+        const url=URL.createObjectURL(blob);
+        const audio=new Audio(url);
+        audioElRef.current=audio;
+        audio.onended=()=>{URL.revokeObjectURL(url);setIsSpeaking(false);audioElRef.current=null;resolve();};
+        audio.onerror=()=>{URL.revokeObjectURL(url);setIsSpeaking(false);audioElRef.current=null;resolve();};
+        audio.play().catch(()=>{setIsSpeaking(false);resolve();});
+      }catch(e){
+        console.error('TTS error:',e);
+        setIsSpeaking(false);resolve();
+      }
     });
   };
 
-  // Ask the first starter question and begin interview
-  const startInterview=async()=>{
-    setPhase('interviewing');
-    update({started_at:new Date().toISOString(),device_type:/Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop'});
-    // Ask first question
-    if(starterQs.length>0){
-      const firstQ=starterQs[0];
-      const entry={role:'ai',text:firstQ,ts:new Date().toISOString()};
-      setTranscript([entry]);
-      update({transcript:[entry]});
-      setCurrentQIdx(1);
-      await speak(firstQ);
+  // ── Voice Activity Detection (VAD) ──
+  // Detects silence after the user stops speaking
+  const SILENCE_THRESHOLD=15; // RMS below this = silence
+  const SILENCE_DURATION=1800; // ms of silence before we consider them done
+  const SPEECH_MIN_DURATION=800; // minimum ms of speech to count as valid
+
+  const startVAD=(stream)=>{
+    const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const source=audioCtx.createMediaStreamSource(stream);
+    const analyser=audioCtx.createAnalyser();
+    analyser.fftSize=512;
+    source.connect(analyser);
+    analyserRef.current={analyser,audioCtx,source};
+
+    const dataArray=new Uint8Array(analyser.fftSize);
+    let speechStartTime=null;
+    let lastSpeechTime=null;
+    let hasSpeech=false;
+
+    const checkVAD=()=>{
+      if(phaseRef.current!=='interviewing'){return;}
+      analyser.getByteTimeDomainData(dataArray);
+      // Calculate RMS
+      let sum=0;
+      for(let i=0;i<dataArray.length;i++){const v=(dataArray[i]-128)/128;sum+=v*v;}
+      const rms=Math.sqrt(sum/dataArray.length)*200;
+
+      const now=Date.now();
+      if(rms>SILENCE_THRESHOLD){
+        if(!speechStartTime)speechStartTime=now;
+        lastSpeechTime=now;
+        hasSpeech=true;
+      }
+
+      // If we had speech and now it's been quiet for SILENCE_DURATION
+      if(hasSpeech&&lastSpeechTime&&(now-lastSpeechTime)>SILENCE_DURATION){
+        const speechLen=lastSpeechTime-speechStartTime;
+        if(speechLen>=SPEECH_MIN_DURATION){
+          // User finished speaking — process their response
+          hasSpeech=false;speechStartTime=null;lastSpeechTime=null;
+          processUserResponse();
+          return; // stop VAD loop; will restart after AI responds
+        }
+      }
+      vadFrameRef.current=requestAnimationFrame(checkVAD);
+    };
+    vadFrameRef.current=requestAnimationFrame(checkVAD);
+  };
+
+  const stopVAD=()=>{
+    if(vadFrameRef.current)cancelAnimationFrame(vadFrameRef.current);
+    if(analyserRef.current){
+      analyserRef.current.source.disconnect();
+      analyserRef.current.audioCtx.close().catch(()=>{});
+      analyserRef.current=null;
     }
   };
 
-  // Record audio from mic
-  const startRecording=async()=>{
+  // ── Mic management: keep stream alive, start/stop MediaRecorder per turn ──
+  const openMic=async()=>{
+    if(streamRef.current)return streamRef.current;
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    streamRef.current=stream;
+    return stream;
+  };
+
+  const closeMic=()=>{
+    if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}
+  };
+
+  const beginListening=async()=>{
     try{
       setError(null);
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const stream=await openMic();
       const mr=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
       chunksRef.current=[];
       mr.ondataavailable=e=>{if(e.data.size>0)chunksRef.current.push(e.data);};
       mr.start(250);
       mediaRecRef.current=mr;
       setIsRecording(true);
+      setIsListening(true);
+      startVAD(stream);
     }catch(err){
       setError('Microphone access denied. Please allow microphone access and try again.');
     }
@@ -1819,65 +1942,70 @@ function AIInterviewWidget({q,value,onChange,brand}){
 
   const stopRecording=()=>{
     return new Promise(resolve=>{
+      stopVAD();
       const mr=mediaRecRef.current;
-      if(!mr||mr.state==='inactive'){resolve(null);return;}
+      if(!mr||mr.state==='inactive'){setIsRecording(false);setIsListening(false);resolve(null);return;}
       mr.onstop=()=>{
         const blob=new Blob(chunksRef.current,{type:mr.mimeType||'audio/webm'});
-        // Stop all tracks
-        mr.stream.getTracks().forEach(t=>t.stop());
         mediaRecRef.current=null;
         setIsRecording(false);
+        setIsListening(false);
         resolve(blob);
       };
       mr.stop();
     });
   };
 
-  // Process user's spoken answer: transcribe → generate follow-up
-  const handleUserResponse=async()=>{
+  // ── Start interview ──
+  const startInterview=async()=>{
+    setPhase('interviewing');
+    update({started_at:new Date().toISOString(),device_type:/Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop'});
+    if(starterQs.length>0){
+      const firstQ=starterQs[0];
+      const entry={role:'ai',text:firstQ,ts:new Date().toISOString()};
+      setTranscript([entry]);
+      update({transcript:[entry]});
+      setCurrentQIdx(1);
+      await speak(firstQ);
+      // After AI speaks, start listening automatically
+      beginListening();
+    }
+  };
+
+  // ── Process user response (called by VAD when silence detected) ──
+  const processUserResponse=async()=>{
     setIsProcessing(true);
     try{
       const blob=await stopRecording();
-      if(!blob||blob.size<1000){setIsProcessing(false);setError('No audio detected. Please try speaking again.');return;}
+      if(!blob||blob.size<1000){setIsProcessing(false);setError('No audio detected. Please try speaking again.');beginListening();return;}
 
-      // Transcribe with Whisper
       const text=await openaiWhisper(blob);
-      if(!text){setIsProcessing(false);setError('Could not transcribe audio. Please try again.');return;}
+      if(!text){setIsProcessing(false);setError('Could not transcribe audio. Please try again.');beginListening();return;}
 
-      // Add user response to transcript
       const userEntry={role:'user',text,ts:new Date().toISOString()};
-      const newTranscript=[...transcript,userEntry];
+      const newTranscript=[...transcriptRef.current,userEntry];
       setTranscript(newTranscript);
 
-      // Calculate remaining time
       const elapsedSec=Math.floor((Date.now()-startRef.current)/1000);
       const remainingSec=maxSec-elapsedSec;
-
-      // Determine if we should move to next starter question or generate a follow-up
-      const answeredStarterCount=newTranscript.filter(t=>t.role==='ai').length;
-      const hasMoreStarters=currentQIdx<starterQs.length;
-      // Time management: calculate how much time per remaining question
-      const remainingStarters=starterQs.length-currentQIdx;
+      const cqIdx=currentQIdxRef.current;
+      const hasMoreStarters=cqIdx<starterQs.length;
+      const remainingStarters=starterQs.length-cqIdx;
       const timePerQuestion=remainingStarters>0?Math.floor(remainingSec/(remainingStarters+1)):remainingSec;
-      const shouldProbe=timePerQuestion>30&&remainingSec>60; // enough time to probe deeper
+      const shouldProbe=timePerQuestion>30&&remainingSec>60;
 
       let aiResponse;
       if(remainingSec<30){
-        // Wrapping up
         aiResponse='Thank you so much for sharing your thoughts! That\'s all the time we have. Your insights are incredibly valuable.';
       } else if(shouldProbe&&!hasMoreStarters){
-        // Generate follow-up based on conversation
         aiResponse=await generateFollowUp(newTranscript,objective,remainingSec);
       } else if(shouldProbe&&hasMoreStarters&&timePerQuestion>45){
-        // Probe on current answer before moving to next starter
         aiResponse=await generateFollowUp(newTranscript,objective,Math.min(timePerQuestion,60));
       } else if(hasMoreStarters){
-        // Move to next starter question
-        const nextQ=starterQs[currentQIdx];
+        const nextQ=starterQs[cqIdx];
         aiResponse='Thank you for that. '+nextQ;
         setCurrentQIdx(prev=>prev+1);
       } else {
-        // Wrap up
         aiResponse=await generateFollowUp(newTranscript,objective,remainingSec);
       }
 
@@ -1887,19 +2015,22 @@ function AIInterviewWidget({q,value,onChange,brand}){
       update({transcript:finalTranscript});
       setIsProcessing(false);
 
-      // Check if AI signaled end
       if(remainingSec<30){
-        setTimeout(()=>wrapUp(),2000);
+        await speak(aiResponse);
+        setTimeout(()=>wrapUp(),1000);
       } else {
         await speak(aiResponse);
+        // After AI finishes speaking, start listening again
+        if(phaseRef.current==='interviewing')beginListening();
       }
     }catch(err){
       setIsProcessing(false);
       setError('Error processing response: '+(err.message||'Unknown error'));
+      if(phaseRef.current==='interviewing')beginListening();
     }
   };
 
-  // Generate dynamic follow-up via OpenAI
+  // Generate dynamic follow-up
   const generateFollowUp=async(trans,obj,remainSec)=>{
     const conversationText=trans.map(t=>`${t.role==='ai'?'Interviewer':'Participant'}: ${t.text}`).join('\n');
     const systemPrompt=`You are a skilled UX research interviewer conducting a user interview. Your research objective is: "${obj}"
@@ -1926,15 +2057,18 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
   // End the interview
   const wrapUp=()=>{
     clearInterval(timerRef.current);
+    stopVAD();
     if(mediaRecRef.current&&mediaRecRef.current.state!=='inactive'){
-      mediaRecRef.current.stream.getTracks().forEach(t=>t.stop());
+      mediaRecRef.current.stop();
       mediaRecRef.current=null;
     }
+    closeMic();
     setIsRecording(false);
-    window.speechSynthesis?.cancel();
+    setIsListening(false);
+    if(audioElRef.current){audioElRef.current.pause();audioElRef.current=null;}
     setIsSpeaking(false);
     setPhase('done');
-    const finalTranscript=[...transcript];
+    const finalTranscript=[...transcriptRef.current];
     update({
       transcript:finalTranscript,
       completed_at:new Date().toISOString(),
@@ -1944,7 +2078,10 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
     });
   };
 
-  // No API key configured
+  // Cleanup on unmount
+  useEffect(()=>()=>{stopVAD();closeMic();clearInterval(timerRef.current);},[]);
+
+  // No API key
   if(!OPENAI_KEY){
     return React.createElement('div',{style:{padding:20,textAlign:'center',color:'#ef4444'}},
       mIcon('error_outline',{size:32,style:{display:'block',margin:'0 auto 8px'}}),
@@ -1953,7 +2090,7 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
     );
   }
 
-  // Phase: idle — show objective, duration, and Start button
+  // Phase: idle
   if(phase==='idle'){
     return React.createElement('div',null,
       objective&&React.createElement('div',{style:{background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:10,padding:'14px 18px',marginBottom:16}},
@@ -1966,7 +2103,7 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
       React.createElement('div',{style:{border:'2px dashed #d1d5db',borderRadius:12,padding:'32px 20px',textAlign:'center',background:'#fafafa',marginBottom:12}},
         mIcon('mic',{size:48,style:{color:brand||'#9333ea',display:'block',margin:'0 auto 12px'}}),
         React.createElement('p',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:6}},'AI-Moderated Voice Interview'),
-        React.createElement('p',{style:{fontSize:13,color:'#6b7280',marginBottom:4}},'You\'ll have a conversation with an AI interviewer who will ask questions and follow up based on your answers.'),
+        React.createElement('p',{style:{fontSize:13,color:'#6b7280',marginBottom:4}},'You\'ll have a natural conversation with an AI interviewer. Just speak normally — the AI will listen and respond when you\'re done.'),
         React.createElement('p',{style:{fontSize:12,color:'#9ca3af',marginBottom:16}},`Duration: ${q.ai_duration||'3-5'} minutes`+(ttsEnabled?' · The AI will speak its questions aloud':'')),
         React.createElement('div',{style:{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:12,color:'#92400e',display:'inline-block',textAlign:'left'}},
           mIcon('info',{size:14,style:{verticalAlign:'middle',marginRight:4}}),'Your microphone will be used to capture your responses. Audio is transcribed to text only — no recordings are stored.'
@@ -1981,7 +2118,7 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
     );
   }
 
-  // Phase: interviewing — conversation flow
+  // Phase: interviewing
   if(phase==='interviewing'){
     return React.createElement('div',null,
       // Timer bar
@@ -1992,12 +2129,16 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
           React.createElement('span',{style:{color:'#9ca3af',fontSize:11}},` / ${formatTime(maxSec)}`)
         ),
         React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
-          isRecording&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#ef4444'}},
+          isListening&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#4ade80'}},
+            React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:'#4ade80',animation:'pulse 1.5s infinite'}}),
+            'Listening'
+          ),
+          isRecording&&!isListening&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#ef4444'}},
             React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:'#ef4444',animation:'pulse 1.5s infinite'}}),
             'Recording'
           ),
-          isSpeaking&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#4ade80'}},
-            mIcon('volume_up',{size:14}),'Speaking'
+          isSpeaking&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#a78bfa'}},
+            mIcon('volume_up',{size:14}),'AI Speaking'
           ),
           React.createElement('button',{onClick:wrapUp,style:{background:'transparent',border:'1px solid #4b5563',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,cursor:'pointer'}},'End Interview')
         )
@@ -2026,22 +2167,17 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
           )
         )
       ),
-      // Action buttons
-      React.createElement('div',{style:{display:'flex',justifyContent:'center',gap:12}},
-        !isRecording&&!isProcessing&&!isSpeaking&&React.createElement('button',{
-          onClick:startRecording,
-          style:{background:'#ef4444',color:'white',border:'none',padding:'12px 28px',borderRadius:50,fontSize:15,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .15s',boxShadow:'0 4px 14px rgba(239,68,68,0.4)'}
-        },mIcon('mic',{size:20,style:{color:'white'}}),'Hold to Speak'),
-        isRecording&&React.createElement('button',{
-          onClick:handleUserResponse,
-          style:{background:'#111827',color:'white',border:'none',padding:'12px 28px',borderRadius:50,fontSize:15,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'all .15s',animation:'pulse 1.5s infinite'}
-        },mIcon('stop',{size:20,style:{color:'white'}}),'Done Speaking'),
-        isProcessing&&React.createElement('div',{style:{padding:'12px 28px',fontSize:14,color:'#6b7280'}},
-          'Processing your response...'
+      // Speaking animation + status area
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,minHeight:80}},
+        isSpeaking&&React.createElement(SpeakingAnimation),
+        isSpeaking&&React.createElement('div',{style:{fontSize:13,color:'#9333ea',fontWeight:500}},'AI is speaking...'),
+        isListening&&!isSpeaking&&!isProcessing&&React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:6}},
+          React.createElement('div',{style:{width:56,height:56,borderRadius:'50%',background:'linear-gradient(135deg,#4ade80,#22c55e)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(74,222,128,0.4)',animation:'pulse 2s infinite'}},
+            mIcon('mic',{size:28,style:{color:'white'}})
+          ),
+          React.createElement('span',{style:{fontSize:13,color:'#16a34a',fontWeight:500}},'Speak naturally — I\'m listening')
         ),
-        isSpeaking&&React.createElement('div',{style:{padding:'12px 28px',fontSize:14,color:'#9333ea',display:'flex',alignItems:'center',gap:8}},
-          mIcon('volume_up',{size:18,style:{color:'#9333ea'}}),'AI is speaking...'
-        )
+        isProcessing&&React.createElement('div',{style:{fontSize:13,color:'#6b7280'}},'Processing your response...')
       ),
       error&&React.createElement('div',{style:{marginTop:12,padding:'8px 14px',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,fontSize:13,color:'#dc2626',textAlign:'center'}},error)
     );
@@ -2054,7 +2190,6 @@ ${remainSec<90?'- Start wrapping up gracefully, perhaps with one final question'
       React.createElement('p',{style:{fontSize:15,fontWeight:600,color:'#111827',marginBottom:4}},'Interview Complete!'),
       React.createElement('p',{style:{fontSize:13,color:'#6b7280'}},`${transcript.length} exchanges · ${val.duration_ms?formatTime(Math.floor(val.duration_ms/1000)):'-'} duration`)
     ),
-    // Show transcript summary
     React.createElement('div',{style:{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:10,padding:'14px',maxHeight:250,overflowY:'auto'}},
       React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#6b7280',marginBottom:8}},'Conversation Summary'),
       transcript.map((entry,i)=>React.createElement('div',{key:i,style:{marginBottom:8,fontSize:13,lineHeight:1.4}},
